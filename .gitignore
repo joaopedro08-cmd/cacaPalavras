@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build output
+/dist/
+/coverage/
+/.vite/
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

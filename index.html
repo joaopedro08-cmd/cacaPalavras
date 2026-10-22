@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light" data-colorblind="false">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f6f4ee" id="meta-theme" />
+    <meta name="description" content="Deduzi: jogo casual de palavras em português, grátis, sem conta e sem pressa." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Deduzi — jogo casual de palavras</title>
+    <script>
+      try {
+        const saved = JSON.parse(localStorage.getItem('deduzi:preferences:v1') || 'null');
+        const systemDark = matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.dataset.theme = saved?.theme || (systemDark ? 'dark' : 'light');
+        document.documentElement.dataset.colorblind = String(Boolean(saved?.colorblind));
+      } catch {
+        document.documentElement.dataset.theme = 'light';
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Pular para o conteúdo</a>
+    <header class="site-header">
+      <div class="header-inner">
+        <button class="brand" id="brand-home" type="button" aria-label="Deduzi, ir para o início">Deduzi<span>.</span></button>
+        <nav class="header-actions" aria-label="Ações do jogo">
+          <button class="text-button" type="button" data-open-help>Como jogar</button>
+          <button class="icon-button" id="colorblind-toggle" type="button" aria-pressed="false" aria-label="Ativar modo para daltonismo" title="Modo para daltonismo">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M7 4.2l10 15.6M16.8 4.7 7.2 19.3"/></svg>
+          </button>
+          <button class="icon-button" id="theme-toggle" type="button" aria-label="Mudar para tema escuro" title="Mudar tema">
+            <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 13A8.7 8.7 0 0 1 11 3.2 8.8 8.8 0 1 0 20.8 13Z"/></svg>
+            <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          </button>
+        </nav>
+      </div>
+    </header>
+    <main id="content" class="site-main" tabindex="-1">
+      <section class="screen home-screen" id="screen-home" aria-labelledby="home-title">
+        <div class="home-hero">
+          <p class="eyebrow">Jogo casual de palavras · sem pressa</p>
+          <h1 class="home-title" id="home-title" tabindex="-1">Deduzi</h1>
+          <p class="home-lede">Duas formas de descobrir uma palavra: <strong>deduzindo pelas cores</strong> ou <strong>arriscando letras</strong>. Escolha o ritmo e comece.</p>
+          <ul class="home-facts" aria-label="Informações do jogo"><li>Grátis</li><li>Sem conta</li><li>Partidas de 3–8 min</li></ul>
+        </div>
+        <aside class="welcome" id="welcome-strip">
+          <span class="welcome-mark" aria-hidden="true">?</span>
+          <div><strong>Primeira vez por aqui?</strong><p>Um guia rápido mostra as cores do WordGuess e as vidas da Forca.</p></div>
+          <button class="text-button" type="button" data-open-help>Ver como jogar</button>
+          <button class="icon-button welcome-dismiss" id="dismiss-welcome" type="button" aria-label="Dispensar boas-vindas">×</button>
+        </aside>
+        <div class="mode-grid">
+          <article class="mode-card">
+            <div class="card-top"><span class="card-index">01</span><span class="tag">Dedução por cores</span></div>
+            <h2>WordGuess</h2>
+            <p class="card-desc">Acerte uma palavra de 5 letras em até 6 tentativas. As cores mostram o que está no lugar certo, o que existe em outra posição e o que não aparece.</p>
+            <div class="mini-board" aria-hidden="true"><span class="tile correct">P</span><span class="tile present">E</span><span class="tile absent">D</span><span class="tile present">R</span><span class="tile absent">A</span></div>
+            <div class="card-foot"><span>5 letras · 6 tentativas</span><button class="button primary" type="button" data-start="wordguess">Jogar WordGuess <span aria-hidden="true">→</span></button></div>
+          </article>
+          <article class="mode-card">
+            <div class="card-top"><span class="card-index">02</span><span class="tag">Letra por letra</span></div>
+            <h2>Forca</h2>
+            <p class="card-desc">Descubra a palavra antes que as 6 vidas acabem. Cada acerto revela uma posição; cada erro aproxima do fim.</p>
+            <div class="mini-lives" aria-hidden="true"><span>♥</span><span>♥</span><span>♥</span><span>♥</span><span class="lost">♥</span><span class="lost">♥</span></div>
+            <div class="card-foot"><span>Palavras variadas · 6 vidas</span><button class="button primary" type="button" data-start="forca">Jogar Forca <span aria-hidden="true">→</span></button></div>
+          </article>
+        </div>
+        <section class="principles" aria-label="O que esperar do jogo">
+          <div><h3>Sem cronômetro</h3><p>Pense o quanto precisar. A partida espera pelo seu tempo.</p></div>
+          <div><h3>Pistas explicadas</h3><p>Cores, vidas e tentativas sempre têm uma legenda por perto.</p></div>
+          <div><h3>Sem cadastro</h3><p>Jogue de novo quantas vezes quiser, sem preencher formulários.</p></div>
+        </section>
+      </section>
+      <section class="screen game-screen" id="screen-wordguess" aria-labelledby="wordguess-title" hidden>
+        <div class="game-topline"><button class="back-button" type="button" data-go-home>← <span>Início</span></button><span class="mode-label">Palavra de 5 letras</span><button class="text-button" type="button" data-open-help>Como jogar</button></div>
+        <header class="game-heading"><p class="eyebrow">Modo 01 · Dedução por cores</p><h1 id="wordguess-title" tabindex="-1">WordGuess</h1><p>Descubra a palavra de 5 letras em até 6 tentativas. Cada cor é uma pista de posição.</p></header>
+        <div class="play-layout"><div class="board-column">
+          <div class="progress-row"><p id="wg-progress">Tentativa <strong>1</strong> de 6</p><div class="progress-dots" id="wg-dots" aria-hidden="true"></div></div>
+          <label class="hard-mode-control"><input id="wg-hard-mode" type="checkbox"><span>Modo difícil</span><small>Use as pistas já reveladas</small></label>
+          <div class="word-board" id="wg-board" role="group" aria-label="Tabuleiro de WordGuess"></div><p class="game-note" id="wg-note" aria-live="polite" aria-atomic="true"></p>
+          <div class="legend" aria-label="Legenda do feedback"><span><i class="legend-dot correct"></i>lugar certo</span><span><i class="legend-dot present"></i>em outra posição</span><span><i class="legend-dot absent"></i>não aparece</span></div>
+        </div><div class="controls-column">
+          <div id="wg-keyboard-area"><div class="keyboard" id="wg-keyboard" role="group" aria-label="Teclado do WordGuess"></div><p class="keyboard-hint">No computador, use o teclado. <kbd>Enter</kbd> confirma e <kbd>Backspace</kbd> apaga.</p></div>
+          <section class="result-panel" id="wg-result" aria-labelledby="wg-result-title" hidden><p class="eyebrow">Resultado · WordGuess</p><h2 id="wg-result-title" tabindex="-1"></h2><p class="result-label">A palavra era</p><p class="result-word" id="wg-result-word"></p><p class="result-meta" id="wg-result-meta"></p><div class="result-actions"><button class="button primary" id="wg-share" type="button">Compartilhar resultado</button><button class="button secondary" id="wg-again" type="button">Jogar de novo</button></div><button class="link-button" type="button" data-go-home>Voltar ao início</button></section>
+        </div></div>
+      </section>
+      <section class="screen game-screen" id="screen-forca" aria-labelledby="forca-title" hidden>
+        <div class="game-topline"><button class="back-button" type="button" data-go-home>← <span>Início</span></button><span class="mode-label">Letra por letra</span><button class="text-button" type="button" data-open-help>Como jogar</button></div>
+        <header class="game-heading"><p class="eyebrow">Modo 02 · Letra por letra</p><h1 id="forca-title" tabindex="-1">Forca</h1><p>Descubra a palavra antes que as 6 vidas acabem. Cada erro custa uma vida.</p></header>
+        <div class="play-layout hangman-layout"><div class="board-column">
+          <div class="lives-panel"><div><span class="eyebrow">Vidas restantes</span><strong id="forca-lives-text">6 de 6</strong></div><div class="lives" id="forca-lives" role="img" aria-label="6 de 6 vidas restantes"></div></div>
+          <div class="hangman-stage"><div class="hangman-word" id="forca-word" role="img" aria-label="Palavra oculta"></div><p id="forca-word-meta"></p></div><p class="game-note" id="forca-note" aria-live="polite" aria-atomic="true"></p>
+        </div><div class="controls-column">
+          <div id="forca-keyboard-area"><div class="keyboard" id="forca-keyboard" role="group" aria-label="Teclado de letras da Forca"></div><p class="keyboard-hint">Toque em uma letra. Acertos revelam a palavra; erros custam vidas.</p>
+            <form class="word-guess-form" id="forca-guess-form"><label for="forca-guess">Ou chute a palavra inteira</label><div class="guess-input-row"><input id="forca-guess" name="guess" autocomplete="off" autocapitalize="characters" maxlength="12" placeholder="Sua resposta" required><button class="button secondary" type="submit">Chutar</button></div></form>
+          </div>
+          <section class="result-panel" id="forca-result" aria-labelledby="forca-result-title" hidden><p class="eyebrow">Resultado · Forca</p><h2 id="forca-result-title" tabindex="-1"></h2><p class="result-label">A palavra era</p><p class="result-word" id="forca-result-word"></p><p class="result-meta" id="forca-result-meta"></p><div class="result-actions"><button class="button primary" id="forca-share" type="button">Compartilhar resultado</button><button class="button secondary" id="forca-again" type="button">Jogar de novo</button></div><button class="link-button" type="button" data-go-home>Voltar ao início</button></section>
+        </div></div>
+      </section>
+    </main>
+    <footer class="site-footer"><p><strong>Deduzi</strong> — feito para jogar com calma.</p></footer>
+    <div class="modal-backdrop" id="help-modal" hidden><section class="help-dialog" role="dialog" aria-modal="true" aria-labelledby="help-title" aria-describedby="help-description" tabindex="-1"><div class="modal-head"><div><p class="eyebrow">Como jogar</p><h2 id="help-title">Duas regras,<br>nenhum mistério.</h2></div><button class="icon-button" id="close-help" type="button" aria-label="Fechar instruções">×</button></div><p id="help-description">Escolha entre deduzir pelas cores ou revelar letra por letra. Você pode trocar de modo quando quiser.</p><div class="help-grid"><section><p class="eyebrow">Modo 01 · WordGuess</p><h3>Descubra a palavra de 5 letras</h3><ol><li>Digite e confirme uma palavra válida.</li><li>Verde indica lugar certo; amarelo, outra posição; cinza, letra ausente.</li><li>Você tem 6 tentativas.</li></ol></section><section><p class="eyebrow">Modo 02 · Forca</p><h3>Revele letra por letra</h3><ol><li>Escolha letras no teclado ou use o teclado físico.</li><li>Acertos revelam todas as ocorrências.</li><li>Você tem 6 vidas e pode arriscar a palavra inteira.</li></ol></section></div><p class="help-tip"><strong>Dica:</strong> no WordGuess, varie as vogais; na Forca, vogais costumam revelar bastante.</p><button class="button primary" id="help-done" type="button">Entendi, vamos jogar</button></section></div>
+    <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

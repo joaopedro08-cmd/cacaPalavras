@@ -1,0 +1,3415 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Deduzi — protótipo de jogo casual de palavras em português. WordGuess e Forca, sem conta e sem pressa.">
+  <meta name="theme-color" content="#f6f4ee" id="metaTheme">
+  <title>Deduzi — jogo casual de palavras</title>
+
+  <!-- O tema é definido antes da pintura para evitar um flash de cor. -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('deduzi:tema');
+        var valid = saved === 'light' || saved === 'dark';
+        var preferred = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.dataset.theme = valid ? saved : preferred;
+      } catch (error) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
+
+  <style>
+    /* =========================================================
+       1. Tokens e base
+       ========================================================= */
+
+    :root {
+      color-scheme: light;
+      --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+      --bg: #f6f4ee;
+      --surface: #fffcf7;
+      --surface-soft: #efeadf;
+      --ink: #1e1c18;
+      --ink-soft: #625e55;
+      --line: #ddd7cb;
+      --line-strong: #c2bbad;
+
+      --accent: #9a3b26;
+      --accent-hover: #7d2f1e;
+      --accent-ink: #fffaf5;
+      --accent-soft: #f2e4dd;
+      --accent-line: #dfc3b7;
+
+      --tile-correct-bg: #356b52;
+      --tile-correct-ink: #ffffff;
+      --tile-present-bg: #c9972c;
+      --tile-present-ink: #251b06;
+      --tile-absent-bg: #737066;
+      --tile-absent-ink: #ffffff;
+
+      --shadow: 0 18px 40px -24px rgba(48, 40, 28, 0.35);
+      --radius-card: 24px;
+      --radius-tile: 10px;
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #141512;
+      --surface: #1c1d19;
+      --surface-soft: #26271f;
+      --ink: #f2efe7;
+      --ink-soft: #aca79b;
+      --line: #30322b;
+      --line-strong: #4a4c42;
+
+      --accent: #e38b72;
+      --accent-hover: #f0a28b;
+      --accent-ink: #1b120e;
+      --accent-soft: #2c201b;
+      --accent-line: #54382e;
+
+      --tile-correct-bg: #3f7a5e;
+      --tile-correct-ink: #f8fff9;
+      --tile-present-bg: #d7b451;
+      --tile-present-ink: #231a06;
+      --tile-absent-bg: #4a4d44;
+      --tile-absent-ink: #f2efe6;
+
+      --shadow: 0 18px 50px -24px rgba(0, 0, 0, 0.8);
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    html {
+      -webkit-text-size-adjust: 100%;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      margin: 0;
+      min-width: 300px;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font);
+      font-size: 16px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    html.is-locked,
+    html.is-locked body {
+      overflow: hidden;
+    }
+
+    button,
+    textarea,
+    input {
+      font: inherit;
+    }
+
+    button {
+      color: inherit;
+    }
+
+    svg {
+      display: block;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    ::selection {
+      background: var(--accent);
+      color: var(--accent-ink);
+    }
+
+    :where(button, a, textarea, input, select):focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 3px;
+    }
+
+    .screen h1:focus,
+    .result-card h2:focus {
+      outline: none;
+    }
+
+    .sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: 12px;
+      left: 16px;
+      z-index: 300;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: var(--ink);
+      color: var(--bg);
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+      transform: translateY(-160%);
+      transition: transform 0.18s ease;
+    }
+
+    .skip-link:focus {
+      transform: translateY(0);
+    }
+
+    /* =========================================================
+       2. Cabeçalho, botões e estrutura
+       ========================================================= */
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background: var(--bg);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .header-inner,
+    .site-footer-inner {
+      width: 100%;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding-inline: clamp(16px, 5vw, 40px);
+    }
+
+    .header-inner {
+      min-height: 68px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 2px;
+      min-height: 44px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      cursor: pointer;
+    }
+
+    .brand-dot {
+      color: var(--accent);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 46px;
+      padding: 0 20px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      line-height: 1.1;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--accent-ink);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      border-color: var(--line-strong);
+      color: var(--ink);
+    }
+
+    .btn-secondary:hover {
+      background: var(--surface-soft);
+      border-color: var(--ink-soft);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border-color: transparent;
+      color: var(--ink-soft);
+    }
+
+    .btn-ghost:hover {
+      background: var(--surface-soft);
+      color: var(--ink);
+    }
+
+    .btn-sm {
+      min-height: 40px;
+      padding-inline: 14px;
+      font-size: 0.8125rem;
+    }
+
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+      transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+    }
+
+    .icon-btn:hover {
+      background: var(--surface-soft);
+      border-color: var(--line-strong);
+    }
+
+    .icon-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    html[data-theme="light"] .icon-sun,
+    html[data-theme="dark"] .icon-moon {
+      display: none;
+    }
+
+    .site-main {
+      flex: 1 0 auto;
+      width: 100%;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding-inline: clamp(20px, 5vw, 40px);
+    }
+
+    .site-main:focus {
+      outline: none;
+    }
+
+    .site-footer {
+      margin-top: clamp(48px, 8vw, 96px);
+      border-top: 1px solid var(--line);
+    }
+
+    .site-footer-inner {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px 24px;
+      padding-block: 24px 80px;
+      color: var(--ink-soft);
+      font-size: 0.75rem;
+    }
+
+    .site-footer p {
+      margin: 0;
+    }
+
+    .eyebrow {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 0.6875rem;
+      font-weight: 650;
+      letter-spacing: 0.14em;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    /* =========================================================
+       3. Home
+       ========================================================= */
+
+    .screen {
+      padding-top: clamp(36px, 7vw, 80px);
+      padding-bottom: clamp(24px, 4vw, 48px);
+    }
+
+    .screen:not([hidden]) {
+      animation: screenIn 0.28s ease both;
+    }
+
+    .home-hero {
+      max-width: 760px;
+      margin-bottom: clamp(32px, 6vw, 52px);
+    }
+
+    .home-title {
+      margin: 14px 0 18px;
+      font-size: clamp(3.4rem, 13vw, 6.5rem);
+      font-weight: 680;
+      letter-spacing: -0.065em;
+      line-height: 0.9;
+    }
+
+    .home-lede {
+      max-width: 590px;
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: clamp(1.05rem, 2.2vw, 1.22rem);
+      line-height: 1.55;
+    }
+
+    .home-lede strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .home-facts {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 16px;
+      margin: 26px 0 0;
+      padding: 0;
+      color: var(--ink-soft);
+      font-size: 0.75rem;
+      list-style: none;
+    }
+
+    .home-facts li {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .home-facts li + li::before {
+      content: "";
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--line-strong);
+    }
+
+    .welcome {
+      position: relative;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 12px 14px;
+      align-items: start;
+      margin: 0 0 24px;
+      padding: 18px 48px 18px 18px;
+      border: 1px solid var(--accent-line);
+      border-radius: 18px;
+      background: var(--accent-soft);
+    }
+
+    .welcome-mark {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--accent-line);
+      border-radius: 50%;
+      background: var(--surface);
+      color: var(--accent);
+      font-size: 1rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .welcome-copy {
+      min-width: 0;
+    }
+
+    .welcome-title {
+      margin: 0 0 2px;
+      color: var(--ink);
+      font-size: 0.9375rem;
+      font-weight: 650;
+      line-height: 1.4;
+    }
+
+    .welcome-text {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 0.8125rem;
+      line-height: 1.45;
+    }
+
+    .welcome-actions {
+      grid-column: 2;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    .welcome .btn {
+      min-height: 38px;
+      padding-inline: 14px;
+      background: var(--surface);
+      border-color: var(--accent-line);
+      font-size: 0.78rem;
+    }
+
+    .welcome .btn:hover {
+      border-color: var(--accent);
+    }
+
+    .welcome-dismiss {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+    }
+
+    .mode-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+
+    .mode-card {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      padding: clamp(24px, 3.4vw, 36px);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    }
+
+    .mode-card:hover {
+      border-color: var(--accent-line);
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: clamp(28px, 5vw, 44px);
+    }
+
+    .card-index {
+      color: var(--accent);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+    }
+
+    .tag {
+      padding: 4px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--ink-soft);
+      font-size: 0.625rem;
+      font-weight: 650;
+      letter-spacing: 0.08em;
+      line-height: 1.5;
+      text-transform: uppercase;
+    }
+
+    .mode-card h2 {
+      margin: 0 0 10px;
+      font-size: clamp(1.7rem, 4vw, 2rem);
+      font-weight: 670;
+      letter-spacing: -0.04em;
+      line-height: 1.05;
+    }
+
+    .mode-card p {
+      margin: 0;
+    }
+
+    .card-desc {
+      max-width: 44ch;
+      color: var(--ink-soft);
+      font-size: 0.9375rem;
+      line-height: 1.6;
+    }
+
+    .mini-preview {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 66px;
+      margin-top: 28px;
+    }
+
+    .mini-caption {
+      margin-top: 10px;
+      color: var(--ink-soft);
+      font-size: 0.6875rem;
+      line-height: 1.4;
+    }
+
+    .mini-board {
+      display: flex;
+      gap: 7px;
+    }
+
+    .mini-tile {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--surface-soft);
+      color: var(--ink);
+      font-size: 0.85rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .mini-tile.is-correct {
+      border-color: transparent;
+      background: var(--tile-correct-bg);
+      color: var(--tile-correct-ink);
+    }
+
+    .mini-tile.is-present {
+      border-color: transparent;
+      background: var(--tile-present-bg);
+      color: var(--tile-present-ink);
+    }
+
+    .mini-tile.is-absent {
+      border-color: transparent;
+      background: var(--tile-absent-bg);
+      color: var(--tile-absent-ink);
+    }
+
+    .mini-stage {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 13px;
+    }
+
+    .mini-lives {
+      display: flex;
+      gap: 5px;
+    }
+
+    .mini-life {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .mini-life.is-lost {
+      border: 1px solid var(--line-strong);
+      background: transparent;
+    }
+
+    .mini-word {
+      display: flex;
+      align-items: flex-end;
+      gap: 7px;
+      color: var(--ink);
+      font-size: 1rem;
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      line-height: 1;
+    }
+
+    .mini-word span:not(.mini-blank) {
+      min-width: 0.75em;
+      text-align: center;
+    }
+
+    .mini-blank {
+      width: 0.85em;
+      height: 1.15em;
+      border-bottom: 2px solid var(--line-strong);
+    }
+
+    .card-foot {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-top: 28px;
+      padding-top: 22px;
+      border-top: 1px solid var(--line);
+    }
+
+    .card-meta {
+      color: var(--ink-soft);
+      font-size: 0.75rem;
+      line-height: 1.4;
+    }
+
+    .card-foot .btn {
+      margin-left: auto;
+    }
+
+    .mode-card .btn .arrow {
+      transition: transform 0.18s ease;
+    }
+
+    .mode-card .btn:hover .arrow {
+      transform: translateX(3px);
+    }
+
+    .home-principles {
+      display: grid;
+      gap: 24px;
+      margin-top: clamp(48px, 8vw, 80px);
+      padding-top: 28px;
+      border-top: 1px solid var(--line);
+    }
+
+    .principle h3 {
+      margin: 0 0 6px;
+      color: var(--ink);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .principle p {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 0.8125rem;
+      line-height: 1.55;
+    }
+
+    /* =========================================================
+       4. Telas de jogo
+       ========================================================= */
+
+    .screen-game {
+      padding-top: clamp(24px, 4vw, 44px);
+      padding-bottom: clamp(48px, 7vw, 80px);
+    }
+
+    .game-inner {
+      width: 100%;
+      max-width: 960px;
+      margin-inline: auto;
+    }
+
+    .game-topline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: clamp(24px, 4vw, 40px);
+    }
+
+    .back-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 44px;
+      padding: 4px 0;
+      border: 0;
+      background: transparent;
+      color: var(--ink-soft);
+      font-size: 0.8125rem;
+      font-weight: 550;
+      cursor: pointer;
+    }
+
+    .back-button:hover {
+      color: var(--ink);
+    }
+
+    .back-button svg {
+      width: 16px;
+      height: 16px;
+      transition: transform 0.18s ease;
+    }
+
+    .back-button:hover svg {
+      transform: translateX(-2px);
+    }
+
+    .game-mode-label {
+      color: var(--ink-soft);
+      font-size: 0.6875rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .game-help {
+      display: none;
+    }
+
+    .game-heading {
+      max-width: 690px;
+      margin-bottom: clamp(28px, 4vw, 44px);
+    }
+
+    .game-heading h1 {
+      margin: 7px 0 10px;
+      font-size: clamp(2.4rem, 6vw, 3.8rem);
+      font-weight: 680;
+      letter-spacing: -0.055em;
+      line-height: 1;
+    }
+
+    .game-sub {
+      max-width: 56ch;
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 0.9375rem;
+      line-height: 1.55;
+    }
+
+    .play-layout {
+      display: grid;
+      gap: clamp(28px, 5vw, 40px);
+    }
+
+    .board-column,
+    .controls-column {
+      min-width: 0;
+    }
+
+    .progress-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      width: 100%;
+      max-width: 360px;
+      margin-bottom: 12px;
+    }
+
+    .progress-text {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 0.75rem;
+      line-height: 1.4;
+    }
+
+    .progress-text strong {
+      color: var(--ink);
+      font-weight: 650;
+    }
+
+    .progress-dots {
+      display: flex;
+      gap: 5px;
+      flex: 0 0 auto;
+    }
+
+    .progress-dot {
+      width: 16px;
+      height: 3px;
+      border-radius: 999px;
+      background: var(--line);
+      transition: background-color 0.2s ease;
+    }
+
+    .progress-dot.is-used {
+      background: var(--ink-soft);
+    }
+
+    .progress-dot.is-current {
+      background: var(--accent);
+    }
+
+    /* Grade do WordGuess */
+
+    .wg-board {
+      display: grid;
+      gap: clamp(6px, 1.5vw, 9px);
+      width: 100%;
+      max-width: 360px;
+    }
+
+    .wg-row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: inherit;
+    }
+
+    .wg-tile {
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      min-width: 0;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-tile);
+      background: transparent;
+      color: var(--ink);
+      font-size: clamp(1.3rem, 6vw, 1.7rem);
+      font-weight: 680;
+      line-height: 1;
+      text-transform: uppercase;
+      transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+    }
+
+    .wg-tile.has-letter {
+      border-color: var(--ink-soft);
+      background: var(--surface);
+      animation: letterPop 0.13s ease both;
+    }
+
+    .wg-tile.is-scored {
+      border-color: transparent;
+      animation: revealTile 0.38s ease both;
+    }
+
+    .wg-tile.state-correct {
+      background: var(--tile-correct-bg);
+      color: var(--tile-correct-ink);
+    }
+
+    .wg-tile.state-present {
+      background: var(--tile-present-bg);
+      color: var(--tile-present-ink);
+    }
+
+    .wg-tile.state-absent {
+      background: var(--tile-absent-bg);
+      color: var(--tile-absent-ink);
+    }
+
+    .wg-board.is-shaking {
+      animation: shake 0.34s ease;
+    }
+
+    .game-note {
+      min-height: 3.1em;
+      max-width: 46ch;
+      margin: 16px 0 0;
+      color: var(--ink-soft);
+      font-size: 0.875rem;
+      line-height: 1.55;
+    }
+
+    .game-note.is-alert {
+      color: var(--accent);
+    }
+
+    .feedback-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      color: var(--ink-soft);
+      font-size: 0.6875rem;
+      line-height: 1.4;
+    }
+
+    .feedback-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-chip {
+      width: 11px;
+      height: 11px;
+      flex: 0 0 auto;
+      border-radius: 3px;
+    }
+
+    .legend-chip.is-correct {
+      background: var(--tile-correct-bg);
+    }
+
+    .legend-chip.is-present {
+      background: var(--tile-present-bg);
+    }
+
+    .legend-chip.is-absent {
+      background: var(--tile-absent-bg);
+    }
+
+    /* Teclado */
+
+    .keyboard-area {
+      width: 100%;
+      max-width: 480px;
+      margin-inline: auto;
+    }
+
+    .keyboard {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .keyboard-row {
+      display: flex;
+      gap: 5px;
+      justify-content: center;
+    }
+
+    .key {
+      flex: 1 1 0;
+      min-width: 0;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      line-height: 1;
+      text-transform: uppercase;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.08s ease;
+    }
+
+    .key:hover {
+      border-color: var(--line-strong);
+    }
+
+    .key:not([data-state]):not(.key-enter):hover {
+      background: var(--surface-soft);
+    }
+
+    .key:active {
+      transform: translateY(1px);
+    }
+
+    .key.is-action {
+      flex: 1 1 0;
+      font-size: 0.75rem;
+      letter-spacing: 0.01em;
+      text-transform: none;
+      background: var(--surface-soft);
+    }
+
+    .key.is-action.key-enter {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--accent-ink);
+      font-weight: 650;
+    }
+
+    .key.is-action.key-enter:hover {
+      border-color: var(--accent-hover);
+      background: var(--accent-hover);
+    }
+
+    .keyboard-action-row {
+      margin-top: 3px;
+    }
+
+    .key[data-state="correct"] {
+      border-color: transparent;
+      background: var(--tile-correct-bg);
+      color: var(--tile-correct-ink);
+    }
+
+    .key[data-state="present"] {
+      border-color: transparent;
+      background: var(--tile-present-bg);
+      color: var(--tile-present-ink);
+    }
+
+    .key[data-state="absent"] {
+      border-color: transparent;
+      background: var(--tile-absent-bg);
+      color: var(--tile-absent-ink);
+    }
+
+    .key[data-state="wrong"] {
+      border-color: var(--line-strong);
+      border-style: dashed;
+      background: var(--surface-soft);
+      color: var(--ink-soft);
+      text-decoration: line-through;
+    }
+
+    .key[aria-disabled="true"] {
+      cursor: default;
+    }
+
+    .keyboard-hint {
+      margin: 13px 0 0;
+      color: var(--ink-soft);
+      font-size: 0.72rem;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .keyboard-hint kbd {
+      padding: 1px 5px;
+      border: 1px solid var(--line);
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      background: var(--surface);
+      font-family: inherit;
+      font-size: 0.68rem;
+    }
+
+    /* Forca */
+
+    .lives-panel {
+      width: 100%;
+      max-width: 360px;
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--surface);
+    }
+
+    .lives-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 9px;
+    }
+
+    .lives-label {
+      color: var(--ink-soft);
+      font-size: 0.625rem;
+      font-weight: 700;
+      letter-spacing: 0.11em;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .lives-count {
+      color: var(--ink-soft);
+      font-size: 0.8125rem;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.4;
+    }
+
+    .lives-count strong {
+      color: var(--ink);
+      font-weight: 650;
+    }
+
+    .lives {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 24px;
+    }
+
+    .life {
+      width: 22px;
+      height: 22px;
+      color: var(--accent);
+    }
+
+    .life svg {
+      width: 100%;
+      height: 100%;
+      fill: currentColor;
+      stroke: currentColor;
+      stroke-width: 1.4;
+      stroke-linejoin: round;
+      transition: fill 0.2s ease, color 0.2s ease;
+    }
+
+    .life.is-lost {
+      color: var(--line-strong);
+    }
+
+    .life.is-lost svg {
+      fill: transparent;
+    }
+
+    .forca-stage {
+      width: 100%;
+      max-width: 480px;
+      margin-top: clamp(36px, 6vw, 54px);
+      text-align: center;
+    }
+
+    .forca-word {
+      display: flex;
+      flex-wrap: nowrap;
+      justify-content: center;
+      gap: clamp(2px, 1.2vw, 9px);
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .forca-letter {
+      position: relative;
+      width: clamp(23px, 7vw, 40px);
+      height: clamp(46px, 10vw, 60px);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 5px;
+      border-bottom: 2px solid var(--line-strong);
+      color: var(--ink);
+      font-size: clamp(1.45rem, 6vw, 2rem);
+      font-weight: 680;
+      line-height: 1;
+      text-transform: uppercase;
+      transition: border-color 0.2s ease, color 0.2s ease;
+    }
+
+    .forca-letter:empty::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: 42%;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--line-strong);
+      opacity: 0.65;
+      transform: translateX(-50%);
+    }
+
+    .forca-letter.is-revealed {
+      border-color: var(--accent);
+      animation: letterIn 0.25s ease both;
+    }
+
+    .forca-meta {
+      margin: 16px 0 0;
+      color: var(--ink-soft);
+      font-size: 0.75rem;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.4;
+      text-align: center;
+    }
+
+    .forca-hint {
+      width: 100%;
+      max-width: 480px;
+      margin: 16px auto 0;
+      color: var(--ink-soft);
+      font-size: 0.75rem;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    /* =========================================================
+       5. Resultado e compartilhamento
+       ========================================================= */
+
+    .result-card {
+      width: 100%;
+      max-width: 480px;
+      margin-inline: auto;
+      padding: clamp(22px, 4vw, 30px);
+      border: 1px solid var(--accent-line);
+      border-radius: 20px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      scroll-margin-top: 92px;
+    }
+
+    .result-card::before {
+      content: "";
+      display: block;
+      width: 38px;
+      height: 3px;
+      margin-bottom: 16px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .result-card h2 {
+      margin: 6px 0 18px;
+      font-size: clamp(1.5rem, 4vw, 1.85rem);
+      font-weight: 670;
+      letter-spacing: -0.035em;
+      line-height: 1.15;
+    }
+
+    .result-label {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .result-word {
+      margin: 5px 0 16px;
+      color: var(--ink);
+      font-size: clamp(2rem, 8vw, 2.9rem);
+      font-weight: 680;
+      letter-spacing: 0.16em;
+      line-height: 1.1;
+      overflow-wrap: anywhere;
+    }
+
+    .result-meta {
+      margin: 0 0 22px;
+      color: var(--ink-soft);
+      font-size: 0.8125rem;
+      line-height: 1.5;
+    }
+
+    .result-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .result-actions .btn {
+      width: 100%;
+    }
+
+    .result-foot {
+      margin-top: 12px;
+      text-align: center;
+    }
+
+    .link-button {
+      min-height: 40px;
+      padding: 6px 10px;
+      border: 0;
+      background: transparent;
+      color: var(--ink-soft);
+      font-size: 0.78rem;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      cursor: pointer;
+    }
+
+    .link-button:hover {
+      color: var(--ink);
+    }
+
+    .copy-fallback {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .copy-fallback label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--ink-soft);
+      font-size: 0.75rem;
+      line-height: 1.4;
+    }
+
+    .copy-fallback textarea {
+      width: 100%;
+      min-height: 126px;
+      padding: 10px 12px;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      background: var(--surface-soft);
+      color: var(--ink);
+      font-family: var(--font);
+      font-size: 0.78rem;
+      line-height: 1.55;
+      resize: vertical;
+    }
+
+    /* =========================================================
+       6. Modal "Como jogar"
+       ========================================================= */
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      overflow-y: auto;
+      padding: clamp(16px, 4vw, 48px);
+      background: rgba(23, 20, 16, 0.58);
+    }
+
+    .modal {
+      position: relative;
+      width: 100%;
+      max-width: 780px;
+      margin: auto;
+      padding: clamp(24px, 4.5vw, 42px);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--surface);
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.25);
+      animation: modalIn 0.24s ease both;
+    }
+
+    .modal-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .modal h2 {
+      margin: 8px 0 12px;
+      font-size: clamp(1.8rem, 4.5vw, 2.5rem);
+      font-weight: 680;
+      letter-spacing: -0.05em;
+      line-height: 1.05;
+    }
+
+    .modal-lede {
+      max-width: 58ch;
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 0.9375rem;
+      line-height: 1.55;
+    }
+
+    .how-grid {
+      display: grid;
+      gap: 30px;
+      margin-top: 30px;
+    }
+
+    .how-section {
+      min-width: 0;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+    }
+
+    .how-kicker {
+      margin: 0 0 6px;
+      color: var(--accent);
+      font-size: 0.625rem;
+      font-weight: 700;
+      letter-spacing: 0.11em;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .how-section h3 {
+      margin: 0 0 14px;
+      font-size: 1.1rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      line-height: 1.3;
+    }
+
+    .steps {
+      display: grid;
+      gap: 13px;
+      margin: 0;
+      padding: 0;
+      counter-reset: step;
+      list-style: none;
+    }
+
+    .steps li {
+      position: relative;
+      padding-left: 34px;
+      color: var(--ink-soft);
+      font-size: 0.85rem;
+      line-height: 1.55;
+      counter-increment: step;
+    }
+
+    .steps li::before {
+      content: counter(step);
+      position: absolute;
+      top: 1px;
+      left: 0;
+      width: 23px;
+      height: 23px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--accent-line);
+      border-radius: 50%;
+      color: var(--accent);
+      font-size: 0.625rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .steps strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .example {
+      display: flex;
+      gap: 5px;
+      margin-top: 18px;
+    }
+
+    .example .mini-tile {
+      width: 32px;
+      height: 32px;
+      border-radius: 7px;
+      font-size: 0.72rem;
+    }
+
+    .color-list {
+      display: grid;
+      gap: 8px;
+      margin: 16px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .color-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      color: var(--ink-soft);
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+
+    .color-list strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .color-list .legend-chip {
+      margin-top: 3px;
+    }
+
+    .life-demo {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 18px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface-soft);
+    }
+
+    .life-demo .dot-life {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .life-demo .dot-life.is-lost {
+      border: 1px solid var(--line-strong);
+      background: transparent;
+    }
+
+    .life-demo span:last-child {
+      margin-left: 3px;
+      color: var(--ink-soft);
+      font-size: 0.72rem;
+      line-height: 1.4;
+    }
+
+    .how-tip {
+      margin-top: 26px;
+      padding: 14px 16px;
+      border: 1px solid var(--accent-line);
+      border-radius: 14px;
+      background: var(--accent-soft);
+      color: var(--ink-soft);
+      font-size: 0.78rem;
+      line-height: 1.5;
+    }
+
+    .how-tip strong {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--ink);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .how-footnote {
+      margin: 14px 0 0;
+      color: var(--ink-soft);
+      font-size: 0.6875rem;
+      line-height: 1.5;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 24px;
+    }
+
+    .modal-actions .btn {
+      min-width: 148px;
+    }
+
+    /* =========================================================
+       7. Toast e selo do protótipo
+       ========================================================= */
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 64px;
+      z-index: 150;
+      max-width: calc(100vw - 32px);
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: var(--ink);
+      color: var(--bg);
+      font-size: 0.78rem;
+      line-height: 1.4;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      opacity: 0;
+      visibility: hidden;
+      transform: translate(-50%, 10px);
+      transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+      pointer-events: none;
+    }
+
+    .toast.is-visible {
+      opacity: 1;
+      visibility: visible;
+      transform: translate(-50%, 0);
+    }
+
+    .prototype-badge {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 60;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--ink-soft);
+      font-size: 0.625rem;
+      font-weight: 550;
+      letter-spacing: 0.02em;
+      line-height: 1.4;
+      opacity: 0.88;
+      pointer-events: none;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+
+    /* =========================================================
+       8. Movimento
+       ========================================================= */
+
+    @keyframes screenIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: translateY(8px) scale(0.99); }
+      to { opacity: 1; transform: none; }
+    }
+
+    @keyframes letterPop {
+      from { transform: scale(0.96); }
+      to { transform: scale(1); }
+    }
+
+    @keyframes revealTile {
+      from { transform: rotateX(-88deg); opacity: 0.25; }
+      to { transform: rotateX(0); opacity: 1; }
+    }
+
+    @keyframes letterIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-4px); }
+      50% { transform: translateX(4px); }
+      75% { transform: translateX(-2px); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
+
+    /* =========================================================
+       9. Responsivo
+       ========================================================= */
+
+    @media (min-width: 640px) {
+      .welcome {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        padding: 18px 48px 18px 18px;
+      }
+
+      .welcome-actions {
+        grid-column: auto;
+        margin-top: 0;
+      }
+
+      .home-principles {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 30px;
+      }
+
+      .mode-grid {
+        gap: 24px;
+      }
+    }
+
+    @media (min-width: 760px) {
+      .mode-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .card-top {
+        margin-bottom: 36px;
+      }
+
+      .how-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 36px;
+      }
+    }
+
+    @media (min-width: 768px) {
+      .keyboard-hint--desktop {
+        display: block;
+      }
+
+      /* Em tablets, tabuleiro e teclado já cabem lado a lado. */
+      .play-layout {
+        grid-template-columns: minmax(0, 44fr) minmax(0, 56fr);
+        gap: 28px;
+        align-items: start;
+        max-width: 840px;
+        margin-inline: auto;
+      }
+    }
+
+    @media (max-width: 767px) {
+      .keyboard-hint--desktop {
+        display: none;
+      }
+
+      /* Modo foco no mobile: mais tabuleiro e teclado, menos moldura. */
+      body[data-screen="wordguess"] .site-header,
+      body[data-screen="forca"] .site-header {
+        display: none;
+      }
+
+      .game-help {
+        display: inline-flex;
+      }
+
+      .game-mode-label {
+        display: none;
+      }
+
+      .screen-game {
+        padding-top: 14px;
+      }
+
+      .game-topline {
+        margin-bottom: 8px;
+      }
+
+      .game-heading {
+        max-width: 520px;
+        margin: 0 auto 16px;
+      }
+
+      .game-heading h1 {
+        margin: 2px 0 0;
+        font-size: 2rem;
+      }
+
+      .game-heading .eyebrow,
+      .game-heading .game-sub {
+        display: none;
+      }
+
+      .play-layout {
+        max-width: 520px;
+        margin-inline: auto;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .screen-game .game-inner {
+        max-width: 360px;
+      }
+
+      .play-layout {
+        gap: 14px;
+      }
+
+      .progress-row,
+      .wg-board,
+      .lives-panel,
+      .game-note,
+      .feedback-legend {
+        max-width: 300px;
+        margin-inline: auto;
+      }
+
+      .game-note {
+        margin-block: 8px 0;
+        min-height: 2.8em;
+        font-size: 0.82rem;
+        line-height: 1.48;
+      }
+
+      .feedback-legend {
+        justify-content: center;
+        gap: 4px 9px;
+        margin-top: 6px;
+        padding-top: 0;
+        border-top: 0;
+        font-size: 0.62rem;
+      }
+
+      .feedback-legend span {
+        white-space: nowrap;
+      }
+
+      .legend-chip {
+        width: 9px;
+        height: 9px;
+      }
+
+      .progress-row {
+        margin-bottom: 8px;
+      }
+
+      .wg-board {
+        gap: 6px;
+      }
+
+      .wg-row {
+        gap: 6px;
+      }
+    }
+
+    @media (min-width: 960px) {
+      .play-layout {
+        grid-template-columns: minmax(0, 360px) minmax(0, 480px);
+        gap: clamp(48px, 8vw, 96px);
+        justify-content: center;
+        align-items: start;
+        max-width: none;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .header-inner {
+        min-height: 62px;
+      }
+
+      .brand {
+        font-size: 1.05rem;
+      }
+
+      .header-actions {
+        gap: 2px;
+      }
+
+      .btn-sm {
+        padding-inline: 10px;
+        font-size: 0.75rem;
+      }
+
+      .icon-btn {
+        width: 40px;
+        height: 40px;
+      }
+
+      .welcome {
+        padding: 16px 44px 16px 16px;
+      }
+
+      .welcome-mark {
+        width: 32px;
+        height: 32px;
+        font-size: 0.85rem;
+      }
+
+      .card-foot {
+        align-items: stretch;
+      }
+
+      .card-foot .btn {
+        width: 100%;
+      }
+
+      .mini-tile {
+        width: 34px;
+        height: 34px;
+      }
+
+      .keyboard-row {
+        gap: 4px;
+      }
+
+      .screen-game {
+        padding-top: 10px;
+      }
+
+      .game-topline {
+        margin-bottom: 6px;
+      }
+
+      .game-heading {
+        margin-bottom: 12px;
+      }
+
+      .game-heading h1 {
+        font-size: 2rem;
+      }
+
+      .key {
+        height: 42px;
+        font-size: 0.75rem;
+      }
+
+      .forca-stage {
+        margin-top: 22px;
+      }
+
+      .result-word {
+        letter-spacing: 0.12em;
+      }
+
+      .toast {
+        bottom: 56px;
+      }
+
+      .prototype-badge {
+        right: 12px;
+        bottom: 12px;
+        font-size: 0.58rem;
+      }
+    }
+
+    @media (max-width: 370px) {
+      .site-main {
+        padding-inline: 16px;
+      }
+
+      .keyboard-row {
+        gap: 3px;
+      }
+
+      .key {
+        height: 42px;
+        border-radius: 6px;
+      }
+
+      .mini-board {
+        gap: 5px;
+      }
+
+      .mini-tile {
+        width: 31px;
+        height: 31px;
+        font-size: 0.75rem;
+      }
+
+      .forca-letter {
+        width: 22px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <button class="brand" id="brandHome" type="button" aria-label="Deduzi — ir para o início">
+        Deduzi<span class="brand-dot" aria-hidden="true">.</span>
+      </button>
+
+      <nav class="header-actions" aria-label="Ações do jogo">
+        <button class="btn btn-ghost btn-sm" type="button" data-open-help>Como jogar</button>
+        <button class="icon-btn" id="themeToggle" type="button" aria-label="Mudar para tema escuro" title="Mudar para tema escuro">
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.8A8.5 8.5 0 0 1 11.2 3a7 7 0 1 0 9.8 9.8Z"/>
+          </svg>
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+          </svg>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="site-main" id="conteudo" tabindex="-1">
+    <!-- =======================================================
+         Home
+         ======================================================= -->
+    <section class="screen home" id="screen-home" data-screen="home" aria-labelledby="homeTitle">
+      <div class="home-hero">
+        <p class="eyebrow">Jogo casual de palavras · sem pressa</p>
+        <h1 class="home-title" id="homeTitle" tabindex="-1">Deduzi</h1>
+        <p class="home-lede">
+          Duas formas de descobrir uma palavra: <strong>deduzindo pelas cores</strong> ou <strong>arriscando letras</strong>.
+          Escolha o ritmo e comece.
+        </p>
+        <ul class="home-facts" aria-label="Informações do jogo">
+          <li>Grátis</li>
+          <li>Sem conta</li>
+          <li>Partidas de 3–8 min</li>
+        </ul>
+      </div>
+
+      <!-- Onboarding leve: visível na primeira visita, dispensável. -->
+      <div class="welcome" id="welcomeStrip">
+        <span class="welcome-mark" aria-hidden="true">?</span>
+        <div class="welcome-copy">
+          <p class="welcome-title">Primeira vez por aqui?</p>
+          <p class="welcome-text">Um guia de 30 segundos mostra as cores do WordGuess e as vidas da Forca.</p>
+        </div>
+        <div class="welcome-actions">
+          <button class="btn" type="button" data-open-help>Ver como jogar</button>
+        </div>
+        <button class="icon-btn welcome-dismiss" id="dismissWelcome" type="button" aria-label="Dispensar dica de boas-vindas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="mode-grid">
+        <article class="mode-card" aria-labelledby="modeWgTitle">
+          <div class="card-top">
+            <span class="card-index">01</span>
+            <span class="tag">Dedução por cores</span>
+          </div>
+          <h2 id="modeWgTitle">WordGuess</h2>
+          <p class="card-desc">
+            Acerte uma palavra de 5 letras em até 6 tentativas. As cores mostram o que está no lugar certo,
+            o que existe em outra posição e o que não aparece.
+          </p>
+
+          <div class="mini-preview" aria-hidden="true">
+            <div class="mini-board">
+              <span class="mini-tile is-correct">P</span>
+              <span class="mini-tile is-present">E</span>
+              <span class="mini-tile is-absent">D</span>
+              <span class="mini-tile is-present">R</span>
+              <span class="mini-tile is-absent">A</span>
+            </div>
+            <p class="mini-caption">verde: lugar certo · amarelo: em outra posição</p>
+          </div>
+
+          <div class="card-foot">
+            <span class="card-meta">5 letras · 6 tentativas</span>
+            <button class="btn btn-primary" type="button" data-start="wordguess">
+              Jogar WordGuess <span class="arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+        </article>
+
+        <article class="mode-card" aria-labelledby="modeForcaTitle">
+          <div class="card-top">
+            <span class="card-index">02</span>
+            <span class="tag">Letra por letra</span>
+          </div>
+          <h2 id="modeForcaTitle">Forca</h2>
+          <p class="card-desc">
+            Descubra a palavra letra por letra antes de perder as 6 vidas. Cada acerto revela uma posição;
+            cada erro aproxima do fim.
+          </p>
+
+          <div class="mini-preview" aria-hidden="true">
+            <div class="mini-stage">
+              <div class="mini-lives">
+                <span class="mini-life"></span>
+                <span class="mini-life"></span>
+                <span class="mini-life"></span>
+                <span class="mini-life"></span>
+                <span class="mini-life is-lost"></span>
+                <span class="mini-life is-lost"></span>
+              </div>
+              <div class="mini-word">
+                <span>C</span><span class="mini-blank"></span><span>M</span><span>I</span><span>N</span><span>H</span><span>O</span>
+              </div>
+            </div>
+            <p class="mini-caption">acertos revelam · erros custam vidas</p>
+          </div>
+
+          <div class="card-foot">
+            <span class="card-meta">Palavras variadas · 6 vidas</span>
+            <button class="btn btn-primary" type="button" data-start="forca">
+              Jogar Forca <span class="arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+        </article>
+      </div>
+
+      <section class="home-principles" aria-labelledby="principlesTitle">
+        <h2 class="sr-only" id="principlesTitle">O que esperar do jogo</h2>
+        <div class="principle">
+          <h3>Sem cronômetro</h3>
+          <p>Pense o quanto precisar. A partida espera pelo seu tempo, sem pressão.</p>
+        </div>
+        <div class="principle">
+          <h3>Pistas explicadas</h3>
+          <p>Cores, vidas e tentativas sempre têm uma legenda ou mensagem por perto.</p>
+        </div>
+        <div class="principle">
+          <h3>Sem cadastro</h3>
+          <p>Jogue de novo quantas vezes quiser. Nada para preencher, nada para instalar.</p>
+        </div>
+      </section>
+    </section>
+
+    <!-- =======================================================
+         WordGuess
+         ======================================================= -->
+    <section class="screen screen-game" id="screen-wordguess" data-screen="wordguess" aria-labelledby="wgTitle" hidden>
+      <div class="game-inner">
+        <div class="game-topline">
+          <button class="back-button" type="button" data-go-home>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M19 12H5M11 18l-6-6 6-6"/>
+            </svg>
+            Início
+          </button>
+          <span class="game-mode-label" aria-hidden="true">Palavra de 5 letras</span>
+          <button class="btn btn-ghost btn-sm game-help" type="button" data-open-help>Como jogar</button>
+        </div>
+
+        <header class="game-heading">
+          <p class="eyebrow">Modo 01 · Dedução por cores</p>
+          <h1 id="wgTitle" tabindex="-1">WordGuess</h1>
+          <p class="game-sub">Descubra a palavra de 5 letras em até 6 tentativas. Cada cor é uma pista de posição.</p>
+        </header>
+
+        <div class="play-layout">
+          <div class="board-column">
+            <div class="progress-row">
+              <p class="progress-text" id="wgProgressText">Tentativa <strong>1</strong> de 6</p>
+              <div class="progress-dots" id="wgDots" aria-hidden="true"></div>
+            </div>
+
+            <div class="wg-board" id="wgBoard" role="group" aria-label="Tabuleiro de WordGuess: 6 tentativas de 5 letras"></div>
+
+            <p class="game-note" id="wgNote" aria-live="polite" aria-atomic="true"></p>
+
+            <div class="feedback-legend" aria-label="Legenda das cores">
+              <span><i class="legend-chip is-correct" aria-hidden="true"></i>lugar certo</span>
+              <span><i class="legend-chip is-present" aria-hidden="true"></i>em outra posição</span>
+              <span><i class="legend-chip is-absent" aria-hidden="true"></i>não aparece</span>
+            </div>
+          </div>
+
+          <div class="controls-column">
+            <div class="keyboard-area" id="wgKeyboardArea">
+              <div class="keyboard" id="wgKeyboard" role="group" aria-label="Teclado do WordGuess"></div>
+              <p class="keyboard-hint keyboard-hint--desktop">
+                No computador, use o teclado normalmente. <kbd>Enter</kbd> confirma e <kbd>Backspace</kbd> apaga.
+              </p>
+            </div>
+
+            <div class="result-card" id="wgResult" role="region" aria-labelledby="wgResultTitle" hidden>
+              <p class="eyebrow">Resultado · WordGuess</p>
+              <h2 id="wgResultTitle" tabindex="-1">Você acertou.</h2>
+              <p class="result-label" id="wgResultLabel">A palavra</p>
+              <p class="result-word" id="wgResultWord">FESTA</p>
+              <p class="result-meta" id="wgResultMeta"></p>
+
+              <div class="result-actions">
+                <button class="btn btn-primary" id="wgShareBtn" type="button">Compartilhar resultado</button>
+                <button class="btn btn-secondary" id="wgAgainBtn" type="button">Jogar de novo</button>
+              </div>
+              <div class="result-foot">
+                <button class="link-button" type="button" data-go-home>Voltar ao início</button>
+              </div>
+
+              <div class="copy-fallback" id="wgCopyFallback" hidden>
+                <label for="wgCopyText">Selecione e copie o resultado:</label>
+                <textarea id="wgCopyText" rows="7" readonly></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================
+         Forca
+         ======================================================= -->
+    <section class="screen screen-game" id="screen-forca" data-screen="forca" aria-labelledby="forcaTitle" hidden>
+      <div class="game-inner">
+        <div class="game-topline">
+          <button class="back-button" type="button" data-go-home>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M19 12H5M11 18l-6-6 6-6"/>
+            </svg>
+            Início
+          </button>
+          <span class="game-mode-label" aria-hidden="true">Letra por letra</span>
+          <button class="btn btn-ghost btn-sm game-help" type="button" data-open-help>Como jogar</button>
+        </div>
+
+        <header class="game-heading">
+          <p class="eyebrow">Modo 02 · Letra por letra</p>
+          <h1 id="forcaTitle" tabindex="-1">Forca</h1>
+          <p class="game-sub">Descubra a palavra antes que as 6 vidas acabem. Cada acerto revela; cada erro custa uma vida.</p>
+        </header>
+
+        <div class="play-layout">
+          <div class="board-column">
+            <div class="lives-panel">
+              <div class="lives-head">
+                <span class="lives-label">Vidas restantes</span>
+                <span class="lives-count" id="forcaLivesText"><strong>6</strong> de 6</span>
+              </div>
+              <div class="lives" id="forcaLives" role="img" aria-label="6 de 6 vidas restantes"></div>
+            </div>
+
+            <div class="forca-stage">
+              <div class="forca-word" id="forcaWord" role="img" aria-label="Palavra oculta"></div>
+              <p class="forca-meta" id="forcaWordMeta">0 letras</p>
+            </div>
+
+            <p class="game-note" id="forcaNote" aria-live="polite" aria-atomic="true"></p>
+          </div>
+
+          <div class="controls-column">
+            <div class="keyboard-area" id="forcaKeyboardArea">
+              <div class="keyboard" id="forcaKeyboard" role="group" aria-label="Teclado de letras da Forca"></div>
+              <p class="keyboard-hint">
+                Toque em uma letra. Acertos ficam verdes; erros ficam riscados no teclado.
+              </p>
+            </div>
+
+            <div class="result-card" id="forcaResult" role="region" aria-labelledby="forcaResultTitle" hidden>
+              <p class="eyebrow">Resultado · Forca</p>
+              <h2 id="forcaResultTitle" tabindex="-1">Você descobriu.</h2>
+              <p class="result-label" id="forcaResultLabel">A palavra</p>
+              <p class="result-word" id="forcaResultWord">BICICLETA</p>
+              <p class="result-meta" id="forcaResultMeta"></p>
+
+              <div class="result-actions">
+                <button class="btn btn-primary" id="forcaShareBtn" type="button">Compartilhar resultado</button>
+                <button class="btn btn-secondary" id="forcaAgainBtn" type="button">Jogar de novo</button>
+              </div>
+              <div class="result-foot">
+                <button class="link-button" type="button" data-go-home>Voltar ao início</button>
+              </div>
+
+              <div class="copy-fallback" id="forcaCopyFallback" hidden>
+                <label for="forcaCopyText">Selecione e copie o resultado:</label>
+                <textarea id="forcaCopyText" rows="7" readonly></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer-inner">
+      <p><strong>Deduzi</strong> — protótipo de jogo casual de palavras. Feito para ler com calma.</p>
+    </div>
+  </footer>
+
+  <!-- =========================================================
+       Modal "Como jogar"
+       ========================================================= -->
+  <div class="modal-backdrop" id="helpModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle" aria-describedby="helpDesc">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Como jogar</p>
+          <h2 id="helpTitle">Duas regras,<br>nenhum mistério.</h2>
+        </div>
+        <button class="icon-btn" id="closeHelpBtn" type="button" aria-label="Fechar como jogar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18"/>
+          </svg>
+        </button>
+      </div>
+
+      <p class="modal-lede" id="helpDesc">
+        Escolha entre deduzir pelas cores ou revelar letra por letra. Você pode trocar de modo quando quiser.
+      </p>
+
+      <div class="how-grid">
+        <section class="how-section" aria-labelledby="howWgTitle">
+          <p class="how-kicker">Modo 01 · WordGuess</p>
+          <h3 id="howWgTitle">Descubra a palavra de 5 letras</h3>
+          <ol class="steps">
+            <li><strong>Digite e confirme.</strong> Sua tentativa precisa ter 5 letras. No computador, Enter confirma.</li>
+            <li><strong>Leia as cores.</strong> Elas mostram posição e presença — sem precisar decorar regras.</li>
+            <li><strong>Você tem 6 tentativas.</strong> Se todas acabarem, a palavra é revelada sem penalidade.</li>
+          </ol>
+
+          <div class="example" aria-hidden="true">
+            <span class="mini-tile is-correct">P</span>
+            <span class="mini-tile is-present">E</span>
+            <span class="mini-tile is-absent">D</span>
+            <span class="mini-tile is-present">R</span>
+            <span class="mini-tile is-absent">A</span>
+          </div>
+
+          <ul class="color-list">
+            <li><i class="legend-chip is-correct" aria-hidden="true"></i><span><strong>Verde:</strong> a letra está no lugar certo.</span></li>
+            <li><i class="legend-chip is-present" aria-hidden="true"></i><span><strong>Amarelo:</strong> a letra existe, mas em outra posição.</span></li>
+            <li><i class="legend-chip is-absent" aria-hidden="true"></i><span><strong>Cinza:</strong> a letra não aparece na palavra.</span></li>
+          </ul>
+        </section>
+
+        <section class="how-section" aria-labelledby="howForcaTitle">
+          <p class="how-kicker">Modo 02 · Forca</p>
+          <h3 id="howForcaTitle">Revele a palavra letra por letra</h3>
+          <ol class="steps">
+            <li><strong>Escolha uma letra.</strong> Acertos aparecem na palavra e ficam verdes no teclado.</li>
+            <li><strong>Cuidado com as vidas.</strong> Você começa com 6; cada erro apaga uma. O contador fica sempre visível.</li>
+            <li><strong>Descubra a tempo.</strong> Se as vidas acabarem, a palavra é revelada e você pode jogar de novo.</li>
+          </ol>
+
+          <div class="life-demo" aria-hidden="true">
+            <span class="dot-life"></span>
+            <span class="dot-life"></span>
+            <span class="dot-life"></span>
+            <span class="dot-life"></span>
+            <span class="dot-life is-lost"></span>
+            <span class="dot-life is-lost"></span>
+            <span>exemplo: 4 de 6 vidas</span>
+          </div>
+        </section>
+      </div>
+
+      <div class="how-tip">
+        <strong>Dica para a primeira partida</strong>
+        No WordGuess, comece com vogais variadas. Na Forca, as vogais costumam revelar bastante — mas cada erro conta.
+      </div>
+
+      <p class="how-footnote">
+        Protótipo com listas reduzidas: cinco palavras por modo. No WordGuess, qualquer sequência de 5 letras é aceita
+        para você testar as cores livremente.
+      </p>
+
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="helpDoneBtn" type="button">Entendi, vamos jogar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feedback visual para cópia e outros avisos. -->
+  <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <div class="prototype-badge" aria-label="Protótipo 01, foco em experiência do usuário">Protótipo 01 · Foco em UX</div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      /* =======================================================
+         Utilidades e dados
+         ======================================================= */
+
+      const $ = (selector, root = document) => root.querySelector(selector);
+      const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+
+      const prefersReducedMotion = () =>
+        window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      const reduceMotion = () => prefersReducedMotion();
+
+      const storage = {
+        get(key) {
+          try { return window.localStorage.getItem(key); } catch (error) { return null; }
+        },
+        set(key, value) {
+          try { window.localStorage.setItem(key, value); } catch (error) { /* modo privado: ignora */ }
+        }
+      };
+
+      const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+      const WORDGUESS_ANSWERS = ['FESTA', 'LIVRO', 'PRAIA', 'MUNDO', 'AMIGO'];
+      const FORCA_ANSWERS = ['BICICLETA', 'JANELA', 'ELEFANTE', 'CAMISA', 'BORBOLETA'];
+      const TOTAL_ATTEMPTS = 6;
+      const TOTAL_LIVES = 6;
+
+      const plural = (count, singular, pluralForm) => count === 1 ? singular : pluralForm;
+
+      // Evita repetir imediatamente a palavra da rodada anterior.
+      function pickWord(words, previous) {
+        const pool = words.filter((word) => word !== previous);
+        const source = pool.length ? pool : words;
+        return source[Math.floor(Math.random() * source.length)];
+      }
+
+      /* =======================================================
+         Tema claro/escuro
+         ======================================================= */
+
+      const metaTheme = $('#metaTheme');
+      const themeToggle = $('#themeToggle');
+      let currentTheme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+
+      function syncThemeUI() {
+        const isDark = currentTheme === 'dark';
+        themeToggle.setAttribute(
+          'aria-label',
+          isDark ? 'Mudar para tema claro' : 'Mudar para tema escuro'
+        );
+        themeToggle.title = isDark ? 'Mudar para tema claro' : 'Mudar para tema escuro';
+        if (metaTheme) metaTheme.content = isDark ? '#141512' : '#f6f4ee';
+      }
+
+      function setTheme(theme, persist) {
+        currentTheme = theme;
+        document.documentElement.dataset.theme = theme;
+        syncThemeUI();
+        if (persist) storage.set('deduzi:tema', theme);
+      }
+
+      syncThemeUI();
+
+      themeToggle.addEventListener('click', () => {
+        setTheme(currentTheme === 'dark' ? 'light' : 'dark', true);
+      });
+
+      /* =======================================================
+         Toast e cópia para a área de transferência
+         ======================================================= */
+
+      const toast = $('#toast');
+      let toastTimer = null;
+
+      function showToast(message) {
+        if (!toast) return;
+        toast.textContent = message;
+        toast.classList.add('is-visible');
+        window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(() => {
+          toast.classList.remove('is-visible');
+        }, 3400);
+      }
+
+      async function copyText(text) {
+        // Caminho principal: Clipboard API (exige contexto seguro).
+        if (navigator.clipboard && window.isSecureContext) {
+          try {
+            await navigator.clipboard.writeText(text);
+            return true;
+          } catch (error) {
+            // Segue para o fallback abaixo.
+          }
+        }
+
+        // Fallback compatível com arquivos locais e navegadores antigos.
+        try {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.setAttribute('readonly', '');
+          textarea.style.position = 'fixed';
+          textarea.style.top = '-1000px';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          textarea.setSelectionRange(0, textarea.value.length);
+          const copied = document.execCommand('copy');
+          textarea.remove();
+          return copied;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function resetShareButton(button) {
+        if (!button) return;
+        window.clearTimeout(button._feedbackTimer);
+        if (!button.dataset.originalLabel) {
+          button.dataset.originalLabel = button.textContent.trim();
+        }
+        button.textContent = button.dataset.originalLabel;
+      }
+
+      function flashShareButton(button, label) {
+        if (!button) return;
+        if (!button.dataset.originalLabel) {
+          button.dataset.originalLabel = button.textContent.trim();
+        }
+        window.clearTimeout(button._feedbackTimer);
+        button.textContent = label;
+        button._feedbackTimer = window.setTimeout(() => {
+          button.textContent = button.dataset.originalLabel;
+        }, 2800);
+      }
+
+      async function shareResult(button, fallbackPanel, text) {
+        const copied = await copyText(text);
+
+        if (copied) {
+          showToast('Resultado copiado para a área de transferência.');
+          flashShareButton(button, 'Copiado ✓');
+          return;
+        }
+
+        // Fallback visível: nunca deixa o jogador sem uma saída.
+        if (fallbackPanel) {
+          const field = $('textarea', fallbackPanel);
+          fallbackPanel.hidden = false;
+          if (field) {
+            field.value = text;
+            window.setTimeout(() => {
+              field.focus({ preventScroll: true });
+              field.select();
+            }, 30);
+          }
+        }
+        showToast('Não foi possível copiar automaticamente. O resultado está abaixo.');
+        flashShareButton(button, 'Copie abaixo');
+      }
+
+      /* =======================================================
+         Navegação entre telas
+         ======================================================= */
+
+      const screens = {
+        home: $('#screen-home'),
+        wordguess: $('#screen-wordguess'),
+        forca: $('#screen-forca')
+      };
+
+      const homeTitle = $('#homeTitle');
+      const wgTitle = $('#wgTitle');
+      const forcaTitle = $('#forcaTitle');
+      let activeScreen = 'home';
+
+      function goToScreen(name) {
+        if (!screens[name]) return;
+
+        // Inicia uma partida apenas na primeira entrada no modo.
+        if (name === 'wordguess' && !wg.started) startWordGuess();
+        if (name === 'forca' && !forca.started) startForca();
+
+        Object.entries(screens).forEach(([key, section]) => {
+          section.hidden = key !== name;
+        });
+
+        activeScreen = name;
+        document.body.dataset.screen = name;
+        document.title = name === 'home'
+          ? 'Deduzi — jogo casual de palavras'
+          : `${name === 'wordguess' ? 'WordGuess' : 'Forca'} — Deduzi`;
+
+        // Deep link: mantém a URL sincronizada com a tela atual.
+        if (location.hash !== `#${name}`) {
+          try { history.replaceState(null, '', `#${name}`); } catch (error) { /* file:// antigo */ }
+        }
+
+        window.scrollTo({ top: 0, behavior: reduceMotion() ? 'auto' : 'smooth' });
+
+        // Foco programático no título: navegação previsível para leitores de tela.
+        const targetTitle = name === 'home' ? homeTitle : name === 'wordguess' ? wgTitle : forcaTitle;
+        if (targetTitle) targetTitle.focus({ preventScroll: true });
+      }
+
+      $$('[data-start]').forEach((button) => {
+        button.addEventListener('click', () => goToScreen(button.dataset.start));
+      });
+
+      $$('[data-go-home]').forEach((button) => {
+        button.addEventListener('click', () => goToScreen('home'));
+      });
+
+      $('#brandHome').addEventListener('click', () => goToScreen('home'));
+
+      /* =======================================================
+         Modal "Como jogar" acessível
+         ======================================================= */
+
+      const helpModal = $('#helpModal');
+      const helpDialog = $('.modal', helpModal);
+      const closeHelpBtn = $('#closeHelpBtn');
+      const helpDoneBtn = $('#helpDoneBtn');
+      const welcomeStrip = $('#welcomeStrip');
+      let lastFocusedElement = null;
+
+      const focusableSelector = [
+        'a[href]',
+        'button:not([disabled])',
+        'textarea:not([disabled])',
+        'input:not([disabled])',
+        'select:not([disabled])',
+        '[tabindex]:not([tabindex="-1"])'
+      ].join(',');
+
+      function visibleFocusableElements() {
+        return $$(focusableSelector, helpDialog).filter((element) => {
+          return element.getClientRects().length > 0 && element.getAttribute('aria-hidden') !== 'true';
+        });
+      }
+
+      function openHelp(trigger) {
+        // Guarda o gatilho real, inclusive quando o clique não move o foco.
+        lastFocusedElement = trigger || document.activeElement;
+        helpModal.hidden = false;
+        document.documentElement.classList.add('is-locked');
+
+        // Impede que o conteúdo atrás do diálogo receba foco.
+        [$('.site-header'), $('.site-main'), $('.site-footer'), $('.prototype-badge')].forEach((element) => {
+          if (element && 'inert' in element) element.inert = true;
+        });
+
+        closeHelpBtn.focus({ preventScroll: true });
+      }
+
+      function closeHelp() {
+        if (helpModal.hidden) return;
+        helpModal.hidden = true;
+        document.documentElement.classList.remove('is-locked');
+
+        [$('.site-header'), $('.site-main'), $('.site-footer'), $('.prototype-badge')].forEach((element) => {
+          if (element && 'inert' in element) element.inert = false;
+        });
+
+        // Depois de ver o guia, a dica de primeira visita perde a função.
+        if (welcomeStrip) welcomeStrip.hidden = true;
+
+        const canRestoreFocus = lastFocusedElement &&
+          document.contains(lastFocusedElement) &&
+          lastFocusedElement.getClientRects().length > 0;
+
+        if (canRestoreFocus) {
+          lastFocusedElement.focus({ preventScroll: true });
+        } else {
+          // O gatilho pode estar na dica que acabou de ser dispensada.
+          $('#brandHome').focus({ preventScroll: true });
+        }
+      }
+
+      $$('[data-open-help]').forEach((button) => {
+        button.addEventListener('click', () => openHelp(button));
+      });
+
+      closeHelpBtn.addEventListener('click', closeHelp);
+      helpDoneBtn.addEventListener('click', closeHelp);
+
+      helpModal.addEventListener('click', (event) => {
+        if (event.target === helpModal) closeHelp();
+      });
+
+      helpModal.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeHelp();
+          return;
+        }
+
+        if (event.key !== 'Tab') return;
+
+        const focusable = visibleFocusableElements();
+        if (!focusable.length) {
+          event.preventDefault();
+          helpDialog.focus();
+          return;
+        }
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+
+        if (event.shiftKey && (active === first || !helpDialog.contains(active))) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && (active === last || !helpDialog.contains(active))) {
+          event.preventDefault();
+          first.focus();
+        }
+      });
+
+      $('#dismissWelcome').addEventListener('click', () => {
+        welcomeStrip.hidden = true;
+      });
+
+      /* =======================================================
+         Teclados virtuais
+         ======================================================= */
+
+      function createKeyboard(container, withActions) {
+        const rows = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+
+        rows.forEach((letters) => {
+          const row = document.createElement('div');
+          row.className = 'keyboard-row';
+
+          letters.split('').forEach((letter) => {
+            const key = document.createElement('button');
+            key.type = 'button';
+            key.className = 'key';
+            key.dataset.key = letter;
+            key.textContent = letter;
+            key.setAttribute('aria-label', `Letra ${letter}`);
+            row.appendChild(key);
+          });
+
+          container.appendChild(row);
+        });
+
+        // Ações em uma linha própria: alvos maiores e rótulos legíveis no mobile.
+        if (withActions) {
+          const actionRow = document.createElement('div');
+          actionRow.className = 'keyboard-row keyboard-action-row';
+
+          const backspace = document.createElement('button');
+          backspace.type = 'button';
+          backspace.className = 'key is-action';
+          backspace.dataset.action = 'BACKSPACE';
+          backspace.textContent = 'Apagar';
+          backspace.setAttribute('aria-label', 'Apagar última letra');
+          backspace.setAttribute('aria-keyshortcuts', 'Backspace');
+          actionRow.appendChild(backspace);
+
+          const enter = document.createElement('button');
+          enter.type = 'button';
+          enter.className = 'key is-action key-enter';
+          enter.dataset.action = 'ENTER';
+          enter.textContent = 'Enter';
+          enter.setAttribute('aria-label', 'Confirmar tentativa');
+          enter.setAttribute('aria-keyshortcuts', 'Enter');
+          actionRow.appendChild(enter);
+
+          container.appendChild(actionRow);
+        }
+      }
+
+      /* =======================================================
+         WordGuess
+         ======================================================= */
+
+      const wgBoard = $('#wgBoard');
+      const wgKeyboard = $('#wgKeyboard');
+      const wgKeyboardArea = $('#wgKeyboardArea');
+      const wgNote = $('#wgNote');
+      const wgProgressText = $('#wgProgressText');
+      const wgDots = $('#wgDots');
+      const wgResult = $('#wgResult');
+      const wgResultTitle = $('#wgResultTitle');
+      const wgResultLabel = $('#wgResultLabel');
+      const wgResultWord = $('#wgResultWord');
+      const wgResultMeta = $('#wgResultMeta');
+      const wgShareBtn = $('#wgShareBtn');
+      const wgAgainBtn = $('#wgAgainBtn');
+      const wgCopyFallback = $('#wgCopyFallback');
+      const wgCopyText = $('#wgCopyText');
+
+      const WG_ROWS = 6;
+      const WG_COLS = 5;
+
+      const wg = {
+        started: false,
+        answer: '',
+        current: '',
+        guesses: [],
+        keyStates: {},
+        over: false,
+        won: false
+      };
+
+      const STATE_LABELS = {
+        correct: 'lugar certo',
+        present: 'está na palavra, em outra posição',
+        absent: 'não aparece na palavra'
+      };
+
+      function buildWgBoard() {
+        wgBoard.innerHTML = '';
+        for (let row = 0; row < WG_ROWS; row += 1) {
+          const rowEl = document.createElement('div');
+          rowEl.className = 'wg-row';
+          rowEl.setAttribute('role', 'group');
+          rowEl.setAttribute('aria-label', `Tentativa ${row + 1}`);
+
+          for (let col = 0; col < WG_COLS; col += 1) {
+            const tile = document.createElement('div');
+            tile.className = 'wg-tile';
+            tile.dataset.row = String(row);
+            tile.dataset.col = String(col);
+            tile.setAttribute('aria-label', `Tentativa ${row + 1}, letra ${col + 1}: vazia`);
+            rowEl.appendChild(tile);
+          }
+
+          wgBoard.appendChild(rowEl);
+        }
+      }
+
+      function buildWgDots() {
+        wgDots.innerHTML = '';
+        for (let index = 0; index < TOTAL_ATTEMPTS; index += 1) {
+          const dot = document.createElement('span');
+          dot.className = 'progress-dot';
+          wgDots.appendChild(dot);
+        }
+      }
+
+      function updateWgProgress() {
+        const attemptsUsed = wg.guesses.length;
+
+        if (!wg.over) {
+          wgProgressText.innerHTML = `Tentativa <strong>${Math.min(attemptsUsed + 1, TOTAL_ATTEMPTS)}</strong> de ${TOTAL_ATTEMPTS}`;
+        } else if (wg.won) {
+          wgProgressText.innerHTML = `<strong>${attemptsUsed}</strong> ${plural(attemptsUsed, 'tentativa', 'tentativas')} até acertar`;
+        } else {
+          wgProgressText.textContent = 'Tentativas esgotadas';
+        }
+
+        $$('.progress-dot', wgDots).forEach((dot, index) => {
+          dot.classList.toggle('is-used', index < attemptsUsed);
+          dot.classList.toggle('is-current', !wg.over && index === attemptsUsed);
+        });
+      }
+
+      function setWgNote(message, isAlert = false) {
+        wgNote.textContent = message;
+        wgNote.classList.toggle('is-alert', Boolean(isAlert));
+      }
+
+      function updateWgKeyboard() {
+        $$('.key', wgKeyboard).forEach((key) => {
+          const letter = key.dataset.key;
+          if (!letter) return;
+
+          const state = wg.keyStates[letter];
+          if (state) {
+            key.dataset.state = state;
+            key.setAttribute('aria-label', `${letter}, ${STATE_LABELS[state]}`);
+          } else {
+            delete key.dataset.state;
+            key.setAttribute('aria-label', `Letra ${letter}`);
+          }
+        });
+      }
+
+      function renderWordGuess() {
+        const tiles = $$('.wg-tile', wgBoard);
+
+        tiles.forEach((tile) => {
+          const row = Number(tile.dataset.row);
+          const col = Number(tile.dataset.col);
+          const submitted = wg.guesses[row];
+          let letter = '';
+          let state = '';
+
+          if (submitted) {
+            letter = submitted.word[col];
+            state = submitted.states[col];
+          } else if (row === wg.guesses.length) {
+            letter = wg.current[col] || '';
+          }
+
+          tile.textContent = letter;
+          tile.className = `wg-tile${letter ? ' has-letter' : ''}${state ? ` is-scored state-${state}` : ''}`;
+          tile.style.animationDelay = state ? `${col * 55}ms` : '';
+
+          const position = `Tentativa ${row + 1}, letra ${col + 1}`;
+          if (!letter) {
+            tile.setAttribute('aria-label', `${position}: vazia`);
+          } else if (state) {
+            tile.setAttribute('aria-label', `${position}: ${letter}, ${STATE_LABELS[state]}`);
+          } else {
+            tile.setAttribute('aria-label', `${position}: ${letter}`);
+          }
+        });
+
+        updateWgProgress();
+        updateWgKeyboard();
+      }
+
+      function evaluateGuess(guess, answer) {
+        const results = Array(guess.length).fill('absent');
+        const remaining = {};
+
+        // Primeira passada: posições certas e contagem das letras restantes.
+        for (let index = 0; index < answer.length; index += 1) {
+          if (guess[index] === answer[index]) {
+            results[index] = 'correct';
+          } else {
+            remaining[answer[index]] = (remaining[answer[index]] || 0) + 1;
+          }
+        }
+
+        // Segunda passada: amarelas só se ainda houver ocorrência disponível.
+        // Isso evita marcar letras repetidas a mais (regra do Wordle).
+        for (let index = 0; index < guess.length; index += 1) {
+          if (results[index] === 'correct') continue;
+          const letter = guess[index];
+          if (remaining[letter] > 0) {
+            results[index] = 'present';
+            remaining[letter] -= 1;
+          }
+        }
+
+        return results;
+      }
+
+      function updateWgKeyStates(word, states) {
+        const rank = { absent: 1, present: 2, correct: 3 };
+
+        word.split('').forEach((letter, index) => {
+          const next = states[index];
+          const current = wg.keyStates[letter];
+          if (!current || rank[next] > rank[current]) {
+            wg.keyStates[letter] = next;
+          }
+        });
+      }
+
+      function shakeWgBoard() {
+        wgBoard.classList.remove('is-shaking');
+        // Força o navegador a reiniciar a animação.
+        void wgBoard.offsetWidth;
+        wgBoard.classList.add('is-shaking');
+        window.setTimeout(() => wgBoard.classList.remove('is-shaking'), 400);
+      }
+
+      function startWordGuess(focusAfterReset = false) {
+        wg.answer = pickWord(WORDGUESS_ANSWERS, wg.answer);
+        wg.current = '';
+        wg.guesses = [];
+        wg.keyStates = {};
+        wg.over = false;
+        wg.won = false;
+        wg.started = true;
+
+        buildWgBoard();
+        wgResult.hidden = true;
+        wgKeyboardArea.hidden = false;
+        wgCopyFallback.hidden = true;
+        wgCopyText.value = '';
+        resetShareButton(wgShareBtn);
+
+        setWgNote('Tente uma palavra de 5 letras. Dica: vogais diferentes revelam mais.');
+        renderWordGuess();
+
+        if (focusAfterReset) {
+          wgTitle.focus({ preventScroll: true });
+          window.scrollTo({ top: 0, behavior: reduceMotion() ? 'auto' : 'smooth' });
+        }
+      }
+
+      function addWgLetter(letter) {
+        if (wg.over) return;
+        if (wg.current.length >= WG_COLS) return;
+        wg.current += letter;
+        renderWordGuess();
+      }
+
+      function removeWgLetter() {
+        if (wg.over) return;
+        if (!wg.current.length) return;
+        wg.current = wg.current.slice(0, -1);
+        renderWordGuess();
+      }
+
+      function finishWordGuess() {
+        const attemptsUsed = wg.guesses.length;
+
+        wgKeyboardArea.hidden = true;
+        wgResult.hidden = false;
+        wgResultTitle.textContent = wg.won ? 'Você acertou.' : 'Não foi desta vez.';
+        wgResultLabel.textContent = wg.won ? 'A palavra' : 'A palavra era';
+        wgResultWord.textContent = wg.answer;
+        wgResultMeta.textContent = wg.won
+          ? `Em ${attemptsUsed} de ${TOTAL_ATTEMPTS} tentativas.`
+          : 'As 6 tentativas foram usadas. Tente outra palavra.';
+        wgCopyFallback.hidden = true;
+        wgCopyText.value = '';
+        resetShareButton(wgShareBtn);
+
+        setWgNote(
+          wg.won
+            ? `Você acertou em ${attemptsUsed} ${plural(attemptsUsed, 'tentativa', 'tentativas')}.`
+            : `As tentativas acabaram. A palavra era ${wg.answer}.`
+        );
+
+        wgResultTitle.focus({ preventScroll: true });
+        window.requestAnimationFrame(() => {
+          wgResult.scrollIntoView({ block: 'nearest', behavior: reduceMotion() ? 'auto' : 'smooth' });
+        });
+      }
+
+      function submitWgGuess() {
+        if (wg.over) return;
+
+        if (wg.current.length < WG_COLS) {
+          const missing = WG_COLS - wg.current.length;
+          setWgNote(
+            `Faltam ${missing} ${plural(missing, 'letra', 'letras')}. Complete as 5 para tentar.`,
+            true
+          );
+          shakeWgBoard();
+          return;
+        }
+
+        const guess = wg.current;
+        const states = evaluateGuess(guess, wg.answer);
+
+        wg.guesses.push({ word: guess, states });
+        updateWgKeyStates(guess, states);
+        wg.current = '';
+
+        const correctCount = states.filter((state) => state === 'correct').length;
+        const presentCount = states.filter((state) => state === 'present').length;
+
+        if (guess === wg.answer) {
+          wg.over = true;
+          wg.won = true;
+        } else if (wg.guesses.length >= TOTAL_ATTEMPTS) {
+          wg.over = true;
+          wg.won = false;
+        }
+
+        renderWordGuess();
+
+        if (wg.over) {
+          finishWordGuess();
+          return;
+        }
+
+        const remaining = TOTAL_ATTEMPTS - wg.guesses.length;
+        let summary;
+
+        if (correctCount && presentCount) {
+          summary = `${correctCount} ${plural(correctCount, 'letra', 'letras')} no lugar certo e ${presentCount} em outra posição.`;
+        } else if (correctCount) {
+          summary = `${correctCount} ${plural(correctCount, 'letra', 'letras')} no lugar certo.`;
+        } else if (presentCount) {
+          summary = `${presentCount} ${plural(presentCount, 'letra', 'letras')} em outra posição.`;
+        } else {
+          summary = 'Nenhuma letra dessa palavra aparece.';
+        }
+
+        setWgNote(`${summary} Restam ${remaining} ${plural(remaining, 'tentativa', 'tentativas')}.`);
+      }
+
+      function handleWgKey(action) {
+        if (action === 'ENTER') submitWgGuess();
+        else if (action === 'BACKSPACE') removeWgLetter();
+        else if (/^[A-Z]$/.test(action)) addWgLetter(action);
+      }
+
+      function buildWgShareText() {
+        const score = wg.won ? `${wg.guesses.length}/${TOTAL_ATTEMPTS}` : `X/${TOTAL_ATTEMPTS}`;
+        const grid = wg.guesses.map((guess) => {
+          return guess.states.map((state) => {
+            if (state === 'correct') return '🟩';
+            if (state === 'present') return '🟨';
+            return '⬜';
+          }).join('');
+        }).join('\n');
+
+        return `Deduzi · WordGuess ${score}\n\n${grid}`;
+      }
+
+      wgKeyboard.addEventListener('click', (event) => {
+        const key = event.target.closest('.key');
+        if (!key) return;
+        handleWgKey(key.dataset.action || key.dataset.key || '');
+      });
+
+      wgAgainBtn.addEventListener('click', () => startWordGuess(true));
+
+      wgShareBtn.addEventListener('click', () => {
+        if (!wg.over) return;
+        shareResult(wgShareBtn, wgCopyFallback, buildWgShareText());
+      });
+
+      /* =======================================================
+         Forca
+         ======================================================= */
+
+      const forcaKeyboard = $('#forcaKeyboard');
+      const forcaKeyboardArea = $('#forcaKeyboardArea');
+      const forcaLives = $('#forcaLives');
+      const forcaLivesText = $('#forcaLivesText');
+      const forcaWord = $('#forcaWord');
+      const forcaWordMeta = $('#forcaWordMeta');
+      const forcaNote = $('#forcaNote');
+      const forcaResult = $('#forcaResult');
+      const forcaResultTitle = $('#forcaResultTitle');
+      const forcaResultLabel = $('#forcaResultLabel');
+      const forcaResultWord = $('#forcaResultWord');
+      const forcaResultMeta = $('#forcaResultMeta');
+      const forcaShareBtn = $('#forcaShareBtn');
+      const forcaAgainBtn = $('#forcaAgainBtn');
+      const forcaCopyFallback = $('#forcaCopyFallback');
+      const forcaCopyText = $('#forcaCopyText');
+
+      const HEART_PATH = 'M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z';
+
+      const forca = {
+        started: false,
+        answer: '',
+        guessed: new Set(),
+        revealed: new Set(),
+        attempts: [],
+        wrong: 0,
+        over: false,
+        won: false
+      };
+
+      function buildForcaWord() {
+        forcaWord.innerHTML = '';
+        forcaWordMeta.textContent = `${forca.answer.length} letras`;
+
+        [...forca.answer].forEach((letter, index) => {
+          const slot = document.createElement('span');
+          slot.className = 'forca-letter';
+          slot.dataset.letter = letter;
+          slot.dataset.index = String(index);
+          slot.setAttribute('aria-hidden', 'true');
+          forcaWord.appendChild(slot);
+        });
+      }
+
+      function buildForcaLives() {
+        forcaLives.innerHTML = '';
+        for (let index = 0; index < TOTAL_LIVES; index += 1) {
+          const life = document.createElement('span');
+          life.className = 'life';
+          life.setAttribute('aria-hidden', 'true');
+          life.innerHTML = `<svg viewBox="0 0 24 24" focusable="false"><path d="${HEART_PATH}"/></svg>`;
+          forcaLives.appendChild(life);
+        }
+      }
+
+      function setForcaNote(message, isAlert = false) {
+        forcaNote.textContent = message;
+        forcaNote.classList.toggle('is-alert', Boolean(isAlert));
+      }
+
+      function renderForca() {
+        const livesLeft = TOTAL_LIVES - forca.wrong;
+        const revealAll = forca.over && !forca.won;
+
+        // Letras: atualiza no lugar para que a animação rode só na revelação.
+        $$('.forca-letter', forcaWord).forEach((slot) => {
+          const letter = slot.dataset.letter;
+          const visible = forca.revealed.has(letter) || revealAll;
+          slot.textContent = visible ? letter : '';
+          slot.classList.toggle('is-revealed', visible);
+        });
+
+        $$('.life', forcaLives).forEach((life, index) => {
+          life.classList.toggle('is-lost', index >= livesLeft);
+        });
+
+        forcaLives.setAttribute('aria-label', `${livesLeft} de ${TOTAL_LIVES} vidas restantes`);
+        forcaLivesText.innerHTML = `<strong>${livesLeft}</strong> de ${TOTAL_LIVES}`;
+
+        // Resumo para tecnologia assistiva, já que os slots são visuais.
+        if (revealAll) {
+          forcaWord.setAttribute('aria-label', `Palavra revelada: ${forca.answer}.`);
+        } else {
+          const revealedLetters = [...new Set([...forca.answer].filter((letter) => forca.revealed.has(letter)))];
+          const hiddenCount = [...forca.answer].filter((letter) => !forca.revealed.has(letter)).length;
+          const revealedLabel = revealedLetters.length ? revealedLetters.join(', ') : 'nenhuma';
+          forcaWord.setAttribute(
+            'aria-label',
+            `Palavra de ${forca.answer.length} letras. Letras reveladas: ${revealedLabel}. ${hiddenCount} ${plural(hiddenCount, 'letra oculta', 'letras ocultas')}.`
+          );
+        }
+
+        // Teclado: verde para acerto, riscado para erro, com rótulo por letra.
+        $$('.key', forcaKeyboard).forEach((key) => {
+          const letter = key.dataset.key;
+          if (!letter) return;
+
+          if (forca.guessed.has(letter)) {
+            const isCorrect = forca.revealed.has(letter);
+            key.dataset.state = isCorrect ? 'correct' : 'wrong';
+            key.setAttribute('aria-disabled', 'true');
+            key.setAttribute('aria-label', `${letter}, ${isCorrect ? 'acertou' : 'não está na palavra'}`);
+          } else {
+            delete key.dataset.state;
+            key.removeAttribute('aria-disabled');
+            key.setAttribute('aria-label', `Letra ${letter}`);
+          }
+        });
+      }
+
+      function startForca(focusAfterReset = false) {
+        forca.answer = pickWord(FORCA_ANSWERS, forca.answer);
+        forca.guessed = new Set();
+        forca.revealed = new Set();
+        forca.attempts = [];
+        forca.wrong = 0;
+        forca.over = false;
+        forca.won = false;
+        forca.started = true;
+
+        buildForcaWord();
+        buildForcaLives();
+        forcaResult.hidden = true;
+        forcaKeyboardArea.hidden = false;
+        forcaCopyFallback.hidden = true;
+        forcaCopyText.value = '';
+        resetShareButton(forcaShareBtn);
+
+        setForcaNote('Escolha uma letra para começar. Dica: comece pelas vogais.');
+        renderForca();
+
+        if (focusAfterReset) {
+          forcaTitle.focus({ preventScroll: true });
+          window.scrollTo({ top: 0, behavior: reduceMotion() ? 'auto' : 'smooth' });
+        }
+      }
+
+      function finishForca() {
+        const livesLeft = TOTAL_LIVES - forca.wrong;
+
+        forcaKeyboardArea.hidden = true;
+        forcaResult.hidden = false;
+        forcaResultTitle.textContent = forca.won ? 'Você descobriu.' : 'As vidas acabaram.';
+        forcaResultLabel.textContent = forca.won ? 'A palavra' : 'A palavra era';
+        forcaResultWord.textContent = forca.answer;
+        forcaResultMeta.textContent = forca.won
+          ? (livesLeft === 1
+              ? 'Restou 1 de 6 vidas.'
+              : `Restaram ${livesLeft} de ${TOTAL_LIVES} vidas.`)
+          : 'As 6 vidas foram usadas. Tente outra palavra.';
+        forcaCopyFallback.hidden = true;
+        forcaCopyText.value = '';
+        resetShareButton(forcaShareBtn);
+
+        setForcaNote(
+          forca.won
+            ? `Você descobriu a palavra com ${forca.attempts.length} ${plural(forca.attempts.length, 'tentativa', 'tentativas')}.`
+            : `As vidas acabaram. A palavra era ${forca.answer}.`
+        );
+
+        forcaResultTitle.focus({ preventScroll: true });
+        window.requestAnimationFrame(() => {
+          forcaResult.scrollIntoView({ block: 'nearest', behavior: reduceMotion() ? 'auto' : 'smooth' });
+        });
+      }
+
+      function guessForca(letter) {
+        if (forca.over) return;
+
+        if (forca.guessed.has(letter)) {
+          setForcaNote(`Você já tentou a letra ${letter}. Escolha outra.`);
+          return;
+        }
+
+        forca.guessed.add(letter);
+        const hit = forca.answer.includes(letter);
+        forca.attempts.push({ letter, hit });
+
+        if (hit) {
+          forca.revealed.add(letter);
+        } else {
+          forca.wrong += 1;
+        }
+
+        const livesLeft = TOTAL_LIVES - forca.wrong;
+        const complete = [...forca.answer].every((answerLetter) => forca.revealed.has(answerLetter));
+
+        if (complete) {
+          forca.over = true;
+          forca.won = true;
+        } else if (forca.wrong >= TOTAL_LIVES) {
+          forca.over = true;
+          forca.won = false;
+        }
+
+        renderForca();
+
+        if (forca.over) {
+          finishForca();
+          return;
+        }
+
+        if (hit) {
+          const occurrences = [...forca.answer].filter((answerLetter) => answerLetter === letter).length;
+          setForcaNote(
+            occurrences > 1
+              ? `Boa! A letra ${letter} aparece ${occurrences} vezes na palavra.`
+              : `Boa! A letra ${letter} está na palavra.`
+          );
+        } else {
+          setForcaNote(
+            `A letra ${letter} não aparece. ${livesLeft === 1 ? 'Resta 1 vida.' : `Restam ${livesLeft} vidas.`}`
+          );
+        }
+      }
+
+      function buildForcaShareText() {
+        const livesLeft = TOTAL_LIVES - forca.wrong;
+        const hearts = '❤️'.repeat(livesLeft) + '🖤'.repeat(forca.wrong);
+        const marks = forca.attempts.map((attempt) => attempt.hit ? '🟩' : '🟥');
+        const rows = [];
+        for (let index = 0; index < marks.length; index += 6) {
+          rows.push(marks.slice(index, index + 6).join(''));
+        }
+
+        return [
+          `Deduzi · Forca — ${forca.won ? 'vitória' : 'fim de jogo'}`,
+          `${hearts}  ${livesLeft}/${TOTAL_LIVES} vidas`,
+          '',
+          rows.join('\n'),
+          '',
+          `Palavra: ${forca.answer}`
+        ].join('\n');
+      }
+
+      forcaKeyboard.addEventListener('click', (event) => {
+        const key = event.target.closest('.key');
+        if (!key || !key.dataset.key) return;
+        guessForca(key.dataset.key);
+      });
+
+      forcaAgainBtn.addEventListener('click', () => startForca(true));
+
+      forcaShareBtn.addEventListener('click', () => {
+        if (!forca.over) return;
+        shareResult(forcaShareBtn, forcaCopyFallback, buildForcaShareText());
+      });
+
+      /* =======================================================
+         Teclado físico (desktop)
+         ======================================================= */
+
+      document.addEventListener('keydown', (event) => {
+        if (!helpModal.hidden) return; // O modal trata seus próprios atalhos.
+
+        const target = event.target;
+        const isTypingTarget = target instanceof HTMLElement && (
+          target.matches('input, textarea, select') || target.isContentEditable
+        );
+        if (isTypingTarget) return;
+
+        if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+        // Não sequestra Enter de botões fora do teclado virtual.
+        if (event.key === 'Enter' && target instanceof HTMLElement) {
+          const control = target.closest('button, a');
+          if (control && !control.closest('.keyboard')) return;
+        }
+
+        if (activeScreen === 'wordguess' && !wg.over) {
+          if (/^[a-zA-Z]$/.test(event.key)) {
+            event.preventDefault();
+            addWgLetter(event.key.toUpperCase());
+          } else if (event.key === 'Enter' && !event.repeat) {
+            event.preventDefault();
+            submitWgGuess();
+          } else if (event.key === 'Backspace' && !event.repeat) {
+            event.preventDefault();
+            removeWgLetter();
+          }
+          return;
+        }
+
+        if (activeScreen === 'forca' && !forca.over) {
+          if (/^[a-zA-Z]$/.test(event.key)) {
+            if (event.repeat) return;
+            event.preventDefault();
+            guessForca(event.key.toUpperCase());
+          }
+        }
+      });
+
+      /* =======================================================
+         Inicialização
+         ======================================================= */
+
+      buildWgDots();
+      buildWgBoard();
+      createKeyboard(wgKeyboard, true);
+      createKeyboard(forcaKeyboard, false);
+
+      [wgShareBtn, forcaShareBtn].forEach((button) => {
+        button.dataset.originalLabel = button.textContent.trim();
+      });
+
+      // Estado inicial coerente mesmo antes da primeira partida.
+      wgResult.hidden = true;
+      forcaResult.hidden = true;
+      activeScreen = 'home';
+
+      // Deep links (#wordguess / #forca) para demonstração e retomada.
+      const initialRoute = location.hash.replace('#', '');
+      if (initialRoute === 'wordguess' || initialRoute === 'forca') {
+        goToScreen(initialRoute);
+      } else {
+        goToScreen('home');
+      }
+      window.addEventListener('hashchange', () => {
+        const route = location.hash.replace('#', '');
+        goToScreen(route === 'wordguess' || route === 'forca' ? route : 'home');
+      });
+    })();
+  </script>
+</body>
+</html>

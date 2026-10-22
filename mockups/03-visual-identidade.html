@@ -1,0 +1,4203 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Deduzi — um jogo casual de palavras em português com dois modos: WordGuess e Forca. Menos sorte, mais dedução.">
+  <meta name="theme-color" content="#FFF6E7">
+  <title>Deduzi — Menos sorte, mais dedução</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%23FF6B57'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='42' font-weight='bold' text-anchor='middle' fill='%2319162F'%3ED%3C/text%3E%3C/svg%3E">
+
+  <!-- Define o tema antes da primeira pintura para evitar flash de tema errado. -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('deduzi-theme');
+        var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.dataset.theme = theme;
+      } catch (e) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
+
+  <style>
+    /* ==========================================================================
+       DEDUZI · PROTÓTIPO VISUAL 03
+       Sistema: "caderno de detetive pop".
+       Tinta índigo + papel creme + coral de marca; tiles como carimbos.
+       ========================================================================== */
+
+    /* ---------- 1. Tokens ---------- */
+    :root {
+      --font-display: Georgia, "Gelasio", "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+      --maxw: 1180px;
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --radius-sm: 11px;
+    }
+
+    html[data-theme="light"] {
+      color-scheme: light;
+      --paper: #FFF6E7;
+      --paper-2: #F7E9D1;
+      --surface: #FFFCF4;
+      --surface-2: #F3E6CE;
+      --ink: #19162F;
+      --ink-2: #423C5A;
+      --muted: #655E78;
+      --line: rgba(25, 22, 47, .15);
+      --line-strong: rgba(25, 22, 47, .8);
+      --dot: rgba(25, 22, 47, .14);
+      --coral: #FF6B57;
+      --coral-soft: #FFE0D8;
+      --accent-text: #C33A24;
+      --yellow: #FFCC4D;
+      --yellow-soft: #FFE9AF;
+      --green: #1F7A53;
+      --green-soft: #D7EBDD;
+      --lilac: #D8CBFF;
+      --deep: #19162F;
+      --cream: #FFF6E7;
+      --shadow: #19162F;
+      --focus: #2748E8;
+      --tile-bg: #FFFCF4;
+      --tile-border: rgba(25, 22, 47, .27);
+      --tile-correct: #1F7A53;
+      --tile-correct-ink: #FFF6E7;
+      --tile-present: #FFC83D;
+      --tile-present-ink: #19162F;
+      --tile-absent: #D9D0BE;
+      --tile-absent-ink: #19162F;
+      --key-bg: #FFFCF4;
+      --key-border: rgba(25, 22, 47, .18);
+      --key-shadow: rgba(25, 22, 47, .2);
+      --share-bg: #19162F;
+      --share-ink: #FFF6E7;
+      --backdrop: rgba(17, 14, 38, .68);
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --paper: #14112B;
+      --paper-2: #1B1737;
+      --surface: #211D3F;
+      --surface-2: #2B2650;
+      --ink: #FFF5E4;
+      --ink-2: #D6CDE3;
+      --muted: #A99FBD;
+      --line: rgba(255, 245, 228, .16);
+      --line-strong: rgba(255, 245, 228, .7);
+      --dot: rgba(255, 245, 228, .09);
+      --coral: #FF7C67;
+      --coral-soft: #3A2232;
+      --accent-text: #FFA08E;
+      --yellow: #FFD166;
+      --yellow-soft: #3A3150;
+      --green: #287D58;
+      --green-soft: #1D392E;
+      --lilac: #C9B8FF;
+      --deep: #0E0C20;
+      --cream: #FFF6E7;
+      --shadow: #070612;
+      --focus: #FFD166;
+      --tile-bg: #211D3F;
+      --tile-border: rgba(255, 245, 228, .26);
+      --tile-correct: #287D58;
+      --tile-correct-ink: #FFF5E4;
+      --tile-present: #E7B94A;
+      --tile-present-ink: #14112B;
+      --tile-absent: #4A4462;
+      --tile-absent-ink: #FFF5E4;
+      --key-bg: #29244B;
+      --key-border: rgba(255, 245, 228, .12);
+      --key-shadow: #070612;
+      --share-bg: #0E0C20;
+      --share-ink: #FFF6E7;
+      --backdrop: rgba(5, 4, 15, .8);
+    }
+
+    /* ---------- 2. Base ---------- */
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html {
+      -webkit-text-size-adjust: 100%;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--font-ui);
+      font-size: 16px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: clip;
+      transition: background-color .25s ease, color .25s ease;
+    }
+
+    /* Textura de papel quadriculado, quase imperceptível. */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image: radial-gradient(var(--dot) 1px, transparent 1.4px);
+      background-size: 26px 26px;
+      opacity: .72;
+      -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 62%, transparent 100%);
+      mask-image: linear-gradient(to bottom, #000 0%, #000 62%, transparent 100%);
+    }
+
+    body.modal-open { overflow: hidden; }
+
+    h1, h2, h3, p, ul, ol { margin: 0; }
+    ul, ol { padding: 0; list-style: none; }
+    img, svg { display: block; max-width: 100%; }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    a { color: inherit; }
+    [hidden] { display: none !important; }
+
+    ::selection { background: var(--coral); color: var(--deep); }
+
+    :focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
+      border-radius: 6px;
+    }
+
+    .sr-only {
+      position: absolute !important;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 200;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: var(--deep);
+      color: var(--cream);
+      border: 1.5px solid var(--ink);
+      font-weight: 700;
+      font-size: 13px;
+      text-decoration: none;
+      transform: translateY(-160%);
+      transition: transform .18s ease;
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    .site-shell { position: relative; z-index: 1; overflow-x: clip; }
+
+    .container {
+      width: min(var(--maxw), calc(100% - 32px));
+      margin-inline: auto;
+    }
+
+    @media (min-width: 768px) {
+      .container { width: min(var(--maxw), calc(100% - 56px)); }
+    }
+
+    .screen[hidden] { display: none !important; }
+
+    /* ---------- 3. Componentes base ---------- */
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--ink-2);
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: .14em;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .eyebrow__dot {
+      width: 7px;
+      height: 7px;
+      flex: none;
+      border-radius: 50%;
+      background: var(--coral);
+      box-shadow: 0 0 0 3px var(--coral-soft);
+    }
+
+    .eyebrow--coral { color: var(--accent-text); }
+
+    .btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      min-height: 48px;
+      padding: 12px 21px;
+      border: 1.5px solid var(--ink);
+      border-radius: 13px;
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 4px 4px 0 var(--shadow);
+      font-family: var(--font-ui);
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: .005em;
+      line-height: 1.2;
+      text-decoration: none;
+      transition: transform .16s ease, box-shadow .16s ease, background-color .16s ease, color .16s ease;
+    }
+
+    .btn:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 6px 6px 0 var(--shadow);
+    }
+
+    .btn:active {
+      transform: translate(2px, 2px);
+      box-shadow: 1px 1px 0 var(--shadow);
+    }
+
+    .btn svg { flex: none; transition: transform .18s ease; }
+    .btn:hover svg { transform: translateX(2px); }
+
+    .btn--primary { background: var(--coral); color: var(--deep); }
+    .btn--primary:hover { background: var(--coral); }
+    .btn--ink { background: var(--deep); color: var(--cream); box-shadow: 4px 4px 0 var(--coral); }
+    .btn--ink:hover { box-shadow: 6px 6px 0 var(--coral); }
+    .btn--ghost { background: var(--surface); }
+    .btn--full { width: 100%; }
+    .btn--small { min-height: 42px; padding: 9px 15px; font-size: 13px; }
+
+    .btn.is-copied {
+      background: var(--green);
+      color: var(--cream);
+    }
+
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: .52;
+      transform: none;
+    }
+
+    .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border: 1.5px solid var(--line-strong);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 2px 2px 0 var(--shadow);
+      font-size: 12px;
+      font-weight: 800;
+      transition: transform .16s ease, box-shadow .16s ease, background-color .16s ease;
+    }
+
+    .icon-btn:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 3px 3px 0 var(--shadow);
+      background: var(--coral);
+      color: var(--deep);
+    }
+
+    .icon-btn__q {
+      display: grid;
+      place-items: center;
+      width: 21px;
+      height: 21px;
+      border: 1.5px solid currentColor;
+      border-radius: 50%;
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .btn-help { width: auto; padding-inline: 12px; }
+    .btn-help__label { font-size: 12px; white-space: nowrap; }
+
+    .icon-sun { display: none; }
+    html[data-theme="dark"] .icon-sun { display: block; }
+    html[data-theme="dark"] .icon-moon { display: none; }
+
+    .text-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 0;
+      border: 0;
+      background: none;
+      color: var(--ink);
+      font-family: var(--font-ui);
+      font-size: 12.5px;
+      font-weight: 750;
+      line-height: 1.35;
+      text-align: left;
+      text-decoration: underline;
+      text-decoration-color: var(--coral);
+      text-decoration-thickness: 2px;
+      text-underline-offset: 4px;
+      cursor: pointer;
+    }
+    .text-link:hover { color: var(--accent-text); }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      width: fit-content;
+      padding: 4px 9px;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: .09em;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .wordmark {
+      display: inline-flex;
+      align-items: center;
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -.065em;
+      line-height: .8;
+      user-select: none;
+    }
+
+    .wordmark__text { display: inline-block; transform: translateY(-.02em); }
+
+    .wordmark__i {
+      position: relative;
+      display: inline-grid;
+      place-items: center;
+      width: .58em;
+      height: .72em;
+      margin-left: .015em;
+      border: .018em solid var(--ink);
+      border-radius: .11em;
+      background: var(--coral);
+      color: var(--deep);
+      box-shadow: .05em .05em 0 var(--shadow);
+      transform: rotate(-4deg) translateY(.02em);
+      transition: transform .25s ease;
+    }
+
+    .wordmark__i-letter {
+      font-family: var(--font-ui);
+      font-size: .5em;
+      font-weight: 900;
+      line-height: 1;
+      transform: translateY(-.03em);
+    }
+
+    .wordmark__i::after {
+      content: "";
+      position: absolute;
+      top: -.11em;
+      right: -.1em;
+      width: .13em;
+      height: .13em;
+      background: var(--yellow);
+      clip-path: polygon(50% 0%, 61% 38%, 100% 50%, 61% 62%, 50% 100%, 39% 62%, 0% 50%, 39% 38%);
+      filter: drop-shadow(0 0 .02em rgba(0,0,0,.25));
+    }
+
+    .wordmark--hero {
+      font-size: clamp(80px, 12.5vw, 122px);
+      letter-spacing: -.072em;
+    }
+
+    .wordmark--brand { font-size: 25px; }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+      border-radius: 8px;
+    }
+    .brand:hover .wordmark__i { transform: rotate(1deg) translateY(.02em); }
+
+    /* ---------- 4. Topbar ---------- */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--paper) 87%, transparent);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
+    }
+
+    .topbar__inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 66px;
+    }
+
+    .topbar__left, .topbar__right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .topbar__back {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      height: 40px;
+      padding: 0 12px;
+      border: 1.5px solid var(--line-strong);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 2px 2px 0 var(--shadow);
+      font-size: 12px;
+      font-weight: 800;
+      transition: transform .16s ease, background-color .16s ease;
+    }
+    .topbar__back:hover { transform: translateX(-2px); background: var(--yellow); }
+    .topbar__back svg { flex: none; }
+
+    @media (max-width: 639px) {
+      .btn-help { width: 40px; padding: 0; }
+      .btn-help__label { display: none; }
+      .topbar__back { width: 40px; padding: 0; }
+      .topbar__back .back-label { display: none; }
+      .topbar__inner { min-height: 62px; }
+    }
+
+    /* ---------- 5. Home · hero ---------- */
+    .home { position: relative; padding-bottom: clamp(36px, 5vw, 64px); }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+      padding: clamp(24px, 4vw, 36px) 0 clamp(20px, 3vw, 28px);
+    }
+
+    .hero__copy { position: relative; z-index: 2; }
+
+    .hero__title { margin: 13px 0 4px; line-height: .8; }
+
+    .hero__tagline {
+      position: relative;
+      margin-top: 4px;
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: clamp(1.55rem, 3.1vw, 2.15rem);
+      font-style: italic;
+      font-weight: 400;
+      letter-spacing: -.025em;
+      line-height: 1.15;
+    }
+
+    .hero__tagline-accent {
+      position: relative;
+      display: inline-block;
+      color: var(--accent-text);
+      white-space: nowrap;
+    }
+
+    .hero__scribble {
+      position: absolute;
+      left: -1%;
+      bottom: -.3em;
+      width: 103%;
+      height: .25em;
+      overflow: visible;
+      color: var(--coral);
+    }
+
+    .hero__sub {
+      max-width: 52ch;
+      margin-top: 13px;
+      color: var(--ink-2);
+      font-size: clamp(1rem, 1.5vw, 1.1rem);
+      line-height: 1.6;
+    }
+
+    .hero__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .hero__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 17px;
+      margin-top: 17px;
+      color: var(--ink-2);
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 600;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+
+    .hero__meta li { display: inline-flex; align-items: center; gap: 7px; }
+    .hero__meta li::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      flex: none;
+      border-radius: 50%;
+      background: var(--coral);
+      box-shadow: 0 0 0 3px var(--coral-soft);
+    }
+
+    .hero__art {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-height: 330px;
+      padding: 14px 0 6px;
+      isolation: isolate;
+    }
+
+    .hero__dots {
+      position: absolute;
+      inset: 8% 0 3% 4%;
+      z-index: -1;
+      background-image: radial-gradient(var(--dot) 1.4px, transparent 1.4px);
+      background-size: 18px 18px;
+      -webkit-mask-image: radial-gradient(ellipse at center, #000 26%, transparent 72%);
+      mask-image: radial-gradient(ellipse at center, #000 26%, transparent 72%);
+    }
+
+    .poster {
+      position: relative;
+      width: min(100%, 352px);
+      padding: 19px;
+      border: 1.5px solid var(--ink);
+      border-radius: 26px;
+      background: var(--surface);
+      box-shadow: 9px 9px 0 var(--shadow);
+      transform: rotate(-2.4deg);
+    }
+
+    .poster__head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--ink-2);
+      font-family: var(--font-mono);
+      font-size: 8.5px;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .poster__number {
+      padding: 2px 6px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      color: var(--ink);
+      font-size: 8px;
+    }
+
+    .poster__row {
+      display: flex;
+      gap: 6px;
+      margin: 16px 0 18px;
+    }
+
+    .poster__tile {
+      display: grid;
+      place-items: center;
+      flex: 1 1 0;
+      aspect-ratio: 1;
+      border: 1.5px solid var(--ink);
+      border-radius: 9px;
+      background: var(--paper);
+      color: var(--ink);
+      box-shadow: 2px 2px 0 var(--shadow);
+      font-family: var(--font-ui);
+      font-size: clamp(21px, 4vw, 27px);
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .poster__tile--green { background: var(--tile-correct); color: var(--tile-correct-ink); }
+    .poster__tile--yellow { background: var(--tile-present); color: var(--tile-present-ink); }
+    .poster__tile--q {
+      background: var(--coral);
+      color: var(--deep);
+      font-family: var(--font-display);
+      font-size: clamp(24px, 4.6vw, 31px);
+      transform: rotate(4deg);
+    }
+
+    .poster__quote {
+      margin: 0 2px;
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-style: italic;
+      line-height: 1.3;
+      text-align: center;
+    }
+
+    .poster__quote::before,
+    .poster__quote::after { color: var(--accent-text); }
+
+    .poster__foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 15px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--line);
+    }
+
+    .poster__hearts {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      color: var(--coral);
+      font-family: var(--font-display);
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .poster__tag {
+      color: var(--ink-2);
+      font-family: var(--font-mono);
+      font-size: 8px;
+      font-weight: 600;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+
+    .float-tile {
+      position: absolute;
+      z-index: 3;
+      display: grid;
+      place-items: center;
+      width: clamp(44px, 6vw, 56px);
+      aspect-ratio: 1;
+      border: 1.5px solid var(--ink);
+      border-radius: 12px;
+      font-family: var(--font-ui);
+      font-size: 21px;
+      font-weight: 800;
+      line-height: 1;
+      box-shadow: 4px 4px 0 var(--shadow);
+      animation: bob 6.5s ease-in-out infinite;
+    }
+
+    .float-tile--a {
+      top: 3%;
+      right: 1.5%;
+      background: var(--yellow);
+      color: var(--deep);
+      transform: rotate(11deg);
+      animation-delay: -1.3s;
+    }
+
+    .float-tile--heart {
+      bottom: 15%;
+      left: 0;
+      width: clamp(50px, 6.3vw, 60px);
+      border-radius: 50%;
+      background: var(--coral);
+      color: var(--deep);
+      transform: rotate(-8deg);
+      animation-delay: -3.2s;
+    }
+
+    .hero-sticker {
+      position: absolute;
+      right: 1%;
+      bottom: 2%;
+      z-index: 4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: clamp(78px, 10vw, 94px);
+      aspect-ratio: 1;
+      padding: 8px;
+      border: 1.5px solid var(--ink);
+      border-radius: 50%;
+      background: var(--yellow);
+      color: var(--deep);
+      box-shadow: 5px 5px 0 var(--shadow);
+      transform: rotate(8deg);
+      text-align: center;
+      line-height: 1;
+    }
+
+    .hero-sticker span {
+      font-family: var(--font-mono);
+      font-size: 7.5px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .hero-sticker strong {
+      margin-top: 5px;
+      font-family: var(--font-display);
+      font-size: clamp(15px, 2vw, 18px);
+      font-style: italic;
+      font-weight: 700;
+      letter-spacing: -.02em;
+    }
+
+    .spark {
+      position: absolute;
+      z-index: 2;
+      animation: twinkle 4.8s ease-in-out infinite;
+    }
+
+    .spark--1 { top: 17%; left: 7%; width: 28px; color: var(--coral); }
+    .spark--2 { right: 8%; bottom: 24%; width: 18px; color: var(--ink); animation-delay: -2.1s; }
+
+    @media (min-width: 640px) {
+      .hero__art { min-height: 310px; }
+    }
+
+    @media (min-width: 960px) {
+      .hero {
+        grid-template-columns: minmax(0, 1.06fr) minmax(340px, .84fr);
+        align-items: center;
+        gap: clamp(28px, 5vw, 64px);
+        padding-top: clamp(30px, 3.5vw, 44px);
+        padding-bottom: clamp(20px, 2.6vw, 30px);
+      }
+      .hero__art { min-height: 320px; }
+      .hero__copy { max-width: 640px; }
+    }
+
+    @media (max-width: 540px) {
+      .float-tile--heart { display: none; }
+    }
+
+    @media (max-width: 420px) {
+      .hero__meta { gap: 8px 12px; font-size: 8.5px; }
+      .poster { padding: 15px; border-radius: 21px; }
+      .poster__row { gap: 5px; margin: 13px 0 15px; }
+      .hero__art { min-height: 290px; }
+      .hero-sticker { right: 0; bottom: 0; }
+      .wordmark--brand { font-size: 23px; }
+    }
+
+    /* ---------- 6. Ticker ---------- */
+    .ticker {
+      width: calc(100% + 20px);
+      margin: clamp(34px, 4.5vw, 52px) 0 0 -10px;
+      padding: 12px 0;
+      overflow: hidden;
+      border-top: 1.5px solid var(--ink);
+      border-bottom: 1.5px solid var(--ink);
+      background: var(--deep);
+      color: var(--cream);
+      transform: rotate(-.35deg);
+    }
+
+    .ticker__track {
+      display: flex;
+      width: max-content;
+      animation: marquee 34s linear infinite;
+    }
+
+    .ticker__group {
+      display: flex;
+      align-items: center;
+      gap: 26px;
+      padding-right: 26px;
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-style: italic;
+      font-weight: 600;
+      letter-spacing: .1em;
+      line-height: 1;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .ticker__group i {
+      color: var(--coral);
+      font-family: var(--font-ui);
+      font-size: 13px;
+      font-style: normal;
+    }
+
+    /* ---------- 7. Home · modos ---------- */
+    .modes { padding-top: clamp(34px, 4vw, 50px); scroll-margin-top: 84px; }
+
+    .section-head {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: clamp(20px, 3vw, 30px);
+    }
+
+    .section-head h2 {
+      max-width: 880px;
+      margin-top: 9px;
+      font-family: var(--font-display);
+      font-size: clamp(2rem, 3.6vw, 2.75rem);
+      font-weight: 700;
+      letter-spacing: -.04em;
+      line-height: 1.05;
+    }
+
+    .section-head h2 em {
+      position: relative;
+      color: var(--accent-text);
+      font-style: italic;
+      white-space: nowrap;
+    }
+
+    .section-head__note {
+      max-width: 290px;
+      color: var(--ink-2);
+      font-size: 13.5px;
+      line-height: 1.55;
+    }
+
+    @media (min-width: 820px) {
+      .section-head {
+        flex-direction: row;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 40px;
+      }
+      .section-head__note { padding-bottom: 7px; text-align: right; }
+    }
+
+    .modes__grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+
+    @media (min-width: 720px) {
+      .modes__grid { grid-template-columns: 1fr 1fr; gap: 20px; }
+    }
+
+    .mode-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      min-height: 348px;
+      padding: 24px;
+      overflow: hidden;
+      border: 1.5px solid var(--ink);
+      border-radius: var(--radius-xl);
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 8px 8px 0 var(--shadow);
+      text-decoration: none;
+      isolation: isolate;
+      transition: transform .22s ease, box-shadow .22s ease;
+    }
+
+    .mode-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background-image: radial-gradient(currentColor 1px, transparent 1.2px);
+      background-size: 18px 18px;
+      opacity: .075;
+      -webkit-mask-image: linear-gradient(145deg, transparent 38%, #000 100%);
+      mask-image: linear-gradient(145deg, transparent 38%, #000 100%);
+    }
+
+    .mode-card:hover {
+      transform: translate(-3px, -3px);
+    }
+
+    .mode-card--word:hover { box-shadow: 12px 12px 0 var(--coral); }
+    .mode-card--forca:hover { box-shadow: 12px 12px 0 var(--yellow); }
+
+    .mode-card--forca {
+      background: var(--deep);
+      color: var(--cream);
+      box-shadow: 8px 8px 0 var(--coral);
+    }
+
+    html[data-theme="dark"] .mode-card--forca {
+      background: #262148;
+      border-color: var(--line-strong);
+    }
+
+    .mode-card__top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .mode-card .chip { color: currentColor; opacity: .76; }
+
+    .mode-card__tag {
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: var(--coral);
+      color: var(--deep);
+      font-family: var(--font-mono);
+      font-size: 8.5px;
+      font-weight: 700;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+    }
+
+    .mode-card--forca .mode-card__tag { background: var(--yellow); color: var(--deep); }
+
+    .mode-card__art {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      min-height: 106px;
+      margin: 22px 0 16px;
+    }
+
+    .mini-board {
+      display: flex;
+      gap: 5px;
+    }
+
+    .mini-tile {
+      display: grid;
+      place-items: center;
+      width: clamp(38px, 4.1vw, 47px);
+      aspect-ratio: 1;
+      border: 1.5px solid var(--ink);
+      border-radius: 8px;
+      background: var(--paper);
+      color: var(--ink);
+      box-shadow: 2px 2px 0 var(--shadow);
+      font-family: var(--font-ui);
+      font-size: 17px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .mini-tile--correct { background: var(--tile-correct); color: var(--tile-correct-ink); }
+    .mini-tile--present { background: var(--tile-present); color: var(--tile-present-ink); }
+    .mini-tile--absent { background: var(--tile-absent); color: var(--tile-absent-ink); }
+
+    .mode-card__caption {
+      margin-top: 10px;
+      color: var(--ink-2);
+      font-family: var(--font-mono);
+      font-size: 8.5px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .forca-preview {
+      width: 100%;
+      max-width: 270px;
+    }
+
+    .forca-preview__word {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+    }
+
+    .forca-preview__slot {
+      display: grid;
+      place-items: center;
+      flex: 1 1 0;
+      height: 39px;
+      border-bottom: 2px solid var(--cream);
+      color: var(--cream);
+      font-family: var(--font-display);
+      font-size: 19px;
+      line-height: 1;
+    }
+
+    .forca-preview__slot.is-blank { color: transparent; }
+
+    .forca-preview__foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 12px;
+      color: rgba(255, 246, 231, .7);
+      font-family: var(--font-mono);
+      font-size: 8px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .forca-preview__hearts {
+      display: flex;
+      gap: 2px;
+      color: var(--coral);
+      font-family: var(--font-display);
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    .mode-card__title {
+      margin-top: 2px;
+      font-family: var(--font-display);
+      font-size: clamp(2.3rem, 3.9vw, 3.15rem);
+      font-weight: 700;
+      letter-spacing: -.045em;
+      line-height: .95;
+    }
+
+    .mode-card__desc {
+      max-width: 37ch;
+      margin-top: 10px;
+      color: var(--ink-2);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .mode-card--forca .mode-card__desc { color: rgba(255, 246, 231, .76); }
+
+    .mode-card__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 16px;
+    }
+
+    .mode-card__meta span {
+      padding: 4px 8px;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      opacity: .62;
+      font-family: var(--font-mono);
+      font-size: 8.5px;
+      font-weight: 600;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+
+    .mode-card__cta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+      font-size: 13.5px;
+      font-weight: 800;
+      letter-spacing: .005em;
+    }
+
+    .mode-card--forca .mode-card__cta { border-top-color: rgba(255, 246, 231, .18); }
+
+    .mode-card__arrow {
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      flex: none;
+      border: 1.5px solid var(--ink);
+      border-radius: 50%;
+      background: var(--deep);
+      color: var(--cream);
+      transition: transform .22s ease;
+    }
+
+    .mode-card--forca .mode-card__arrow {
+      border-color: var(--deep);
+      background: var(--coral);
+      color: var(--deep);
+    }
+
+    .mode-card:hover .mode-card__arrow { transform: rotate(-8deg) translateX(2px); }
+
+    .mode-card:focus-visible { outline-offset: 5px; }
+
+    /* ---------- 8. Home · promessa + footer ---------- */
+    .promise {
+      margin-top: clamp(30px, 4vw, 48px);
+      border-top: 1.5px solid var(--line-strong);
+      border-bottom: 1.5px solid var(--line-strong);
+      background: var(--paper-2);
+    }
+
+    .promise__inner {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+      padding: 26px 0;
+    }
+
+    @media (min-width: 780px) {
+      .promise__inner {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0;
+        padding: 28px 0;
+      }
+      .promise__item + .promise__item {
+        padding-left: 28px;
+        border-left: 1px dashed var(--line-strong);
+      }
+    }
+
+    .promise__item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .promise__icon {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      flex: none;
+      border: 1.5px solid var(--ink);
+      border-radius: 11px;
+      box-shadow: 2px 2px 0 var(--shadow);
+      color: var(--deep);
+    }
+
+    .promise__icon--coral { background: var(--coral); }
+    .promise__icon--yellow { background: var(--yellow); }
+    .promise__icon--lilac { background: var(--lilac); }
+
+    .promise__item strong {
+      display: block;
+      margin-top: 1px;
+      font-family: var(--font-display);
+      font-size: 17px;
+      letter-spacing: -.015em;
+    }
+
+    .promise__item p {
+      margin-top: 2px;
+      color: var(--ink-2);
+      font-size: 12.5px;
+      line-height: 1.45;
+    }
+
+    .footer { padding: 30px 0 62px; }
+
+    .footer__inner {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .footer__brand {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 6px 12px;
+    }
+
+    .footer__logo {
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: -.06em;
+      line-height: 1;
+    }
+
+    .footer__logo span { color: var(--coral); }
+
+    .footer__tag {
+      color: var(--ink-2);
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-style: italic;
+    }
+
+    .footer__nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      align-items: center;
+    }
+
+    .footer__meta {
+      margin-top: 2px;
+      padding-top: 14px;
+      border-top: 1px dashed var(--line);
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 8.5px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    @media (min-width: 760px) {
+      .footer__inner {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+      .footer__meta {
+        width: 100%;
+        margin-top: 0;
+      }
+    }
+
+    /* ---------- 9. Jogo · shell ---------- */
+    .game {
+      padding: clamp(22px, 4vw, 40px) 0 64px;
+      min-height: calc(100vh - 67px);
+    }
+
+    .game__container { max-width: 1080px; }
+
+    .game-head {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 14px;
+      padding-bottom: 20px;
+      border-bottom: 1px dashed var(--line);
+      margin-bottom: 24px;
+    }
+
+    .game-title {
+      margin: 5px 0 3px;
+      font-family: var(--font-display);
+      font-size: clamp(2.5rem, 5vw, 3.6rem);
+      font-weight: 700;
+      letter-spacing: -.055em;
+      line-height: 1;
+    }
+
+    .game-title span { color: var(--coral); }
+
+    /* Títulos recebem foco programático ao abrir uma tela; o anel global
+       é pensado para controles, não para um título de display. */
+    .game-title:focus,
+    .game-title:focus-visible,
+    .result__title:focus,
+    .result__title:focus-visible { outline: none; }
+
+    .game-sub {
+      max-width: 52ch;
+      color: var(--ink-2);
+      font-size: 13.5px;
+      line-height: 1.5;
+    }
+
+    .game-sub__short { display: none; }
+
+    @media (max-width: 639px) {
+      .game { padding-top: 18px; }
+      .game-head {
+        gap: 10px;
+        padding-bottom: 14px;
+        margin-bottom: 18px;
+      }
+      .game-title { font-size: 2.35rem; }
+      .game-sub { font-size: 12.5px; line-height: 1.4; }
+      .game-sub__long { display: none; }
+      .game-sub__short { display: inline; }
+      .status-pill { padding: 7px 11px; }
+      .board { width: min(100%, 330px); }
+      .keyboard { margin-top: 16px; }
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      align-self: flex-start;
+      padding: 8px 12px;
+      border: 1.5px solid var(--line-strong);
+      border-radius: 999px;
+      background: var(--surface);
+      box-shadow: 3px 3px 0 var(--shadow);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: .055em;
+      line-height: 1.2;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .status-pill svg { flex: none; color: var(--coral); }
+
+    .attempt-dots { display: flex; gap: 4px; }
+    .attempt-dots span {
+      width: 7px;
+      height: 7px;
+      border: 1.5px solid var(--line-strong);
+      border-radius: 2px;
+      background: transparent;
+    }
+    .attempt-dots span.is-done { background: var(--ink); border-color: var(--ink); }
+    .attempt-dots span.is-current { background: var(--coral); border-color: var(--ink); transform: rotate(8deg); }
+    .attempt-dots span.is-win { background: var(--green); border-color: var(--green); }
+
+    .game-layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 28px;
+    }
+
+    .game-play { width: 100%; min-width: 0; }
+
+    @media (min-width: 980px) {
+      .game-head {
+        flex-direction: row;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 28px;
+      }
+      .game-layout {
+        grid-template-columns: minmax(0, 1fr) 322px;
+        gap: 48px;
+        align-items: start;
+      }
+      .game-side {
+        position: sticky;
+        top: 92px;
+      }
+    }
+
+    /* ---------- 10. WordGuess · tabuleiro e teclado ---------- */
+    .board {
+      display: grid;
+      gap: clamp(6px, 1.25vw, 9px);
+      width: min(100%, 400px);
+      margin: 0 auto;
+      padding-top: 3px;
+    }
+
+    .board__row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: clamp(6px, 1.25vw, 9px);
+    }
+
+    .tile {
+      display: grid;
+      place-items: center;
+      aspect-ratio: 1;
+      border: 1.5px solid var(--tile-border);
+      border-radius: 13px;
+      background: var(--tile-bg);
+      color: var(--ink);
+      box-shadow: inset 0 -3px 0 rgba(25, 22, 47, .06);
+      font-family: var(--font-ui);
+      font-size: clamp(23px, 5.4vw, 33px);
+      font-weight: 800;
+      line-height: 1;
+      text-transform: uppercase;
+      transform-style: preserve-3d;
+      backface-visibility: hidden;
+      transition: border-color .15s ease, background-color .15s ease, color .15s ease;
+    }
+
+    .tile.filled {
+      border-color: var(--ink);
+      animation: tile-pop .16s ease-out;
+    }
+
+    .tile.correct {
+      border-color: transparent;
+      background: var(--tile-correct);
+      color: var(--tile-correct-ink);
+      box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .13);
+    }
+
+    .tile.present {
+      border-color: transparent;
+      background: var(--tile-present);
+      color: var(--tile-present-ink);
+      box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .1);
+    }
+
+    .tile.absent {
+      border-color: transparent;
+      background: var(--tile-absent);
+      color: var(--tile-absent-ink);
+      box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .08);
+    }
+
+    .tile.flip {
+      animation: tile-flip .46s ease both;
+    }
+
+    .board__row.is-active .tile:not(.filled) {
+      background: color-mix(in srgb, var(--tile-bg) 72%, var(--paper-2));
+    }
+
+    .board__row.is-shaking { animation: shake .35s ease; }
+
+    .keyboard {
+      display: flex;
+      flex-direction: column;
+      gap: clamp(5px, 1vw, 7px);
+      width: min(100%, 520px);
+      margin: clamp(18px, 3.5vw, 26px) auto 0;
+    }
+
+    .keyboard__row {
+      display: flex;
+      justify-content: center;
+      gap: clamp(4px, .9vw, 6px);
+    }
+
+    .keyboard__row:nth-child(2) { padding-inline: 4%; }
+    .keyboard--forca .keyboard__row:nth-child(3) { padding-inline: 9%; }
+
+    .key {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1 1 0;
+      min-width: 0;
+      height: clamp(45px, 8.4vw, 53px);
+      border: 1.5px solid var(--key-border);
+      border-radius: 9px;
+      background: var(--key-bg);
+      color: var(--key-ink, var(--ink));
+      box-shadow: 0 3px 0 var(--key-shadow);
+      font-family: var(--font-ui);
+      font-size: clamp(12px, 2.6vw, 14px);
+      font-weight: 800;
+      line-height: 1;
+      text-transform: uppercase;
+      user-select: none;
+      transition: transform .1s ease, background-color .15s ease, color .15s ease, box-shadow .1s ease;
+    }
+
+    .key:hover { background: var(--surface-2); }
+    .key:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 var(--key-shadow);
+    }
+
+    .key--wide {
+      flex-grow: 1.55;
+      font-size: clamp(9.5px, 2.1vw, 11.5px);
+      letter-spacing: -.01em;
+      text-transform: none;
+    }
+
+    .key--enter {
+      border-color: var(--ink);
+      background: var(--coral);
+      color: var(--deep);
+      box-shadow: 0 3px 0 var(--shadow);
+    }
+
+    .key--enter:hover { background: var(--coral); filter: brightness(1.04); }
+
+    .key--back {
+      background: transparent;
+      border-color: var(--line-strong);
+    }
+
+    .key.correct {
+      border-color: transparent;
+      background: var(--tile-correct);
+      color: var(--tile-correct-ink);
+    }
+
+    .key.present {
+      border-color: transparent;
+      background: var(--tile-present);
+      color: var(--tile-present-ink);
+    }
+
+    .key.absent {
+      border-color: transparent;
+      background: var(--tile-absent);
+      color: var(--tile-absent-ink);
+    }
+
+    .keyboard--forca .key.is-used { cursor: default; }
+    .keyboard--forca .key.is-used:hover { background: var(--tile-absent); }
+    .keyboard--forca .key.is-used.correct:hover { background: var(--tile-correct); }
+
+    /* ---------- 11. Pós-jogo ---------- */
+    .post-game {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      width: min(100%, 520px);
+      margin: 18px auto 0;
+      padding: 15px 16px;
+      border: 1.5px dashed var(--line-strong);
+      border-radius: 16px;
+      background: var(--yellow-soft);
+    }
+
+    .post-game[data-outcome="win"] { background: var(--green-soft); }
+    .post-game[data-outcome="lose"] { background: var(--coral-soft); }
+
+    .post-game__title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      line-height: 1.1;
+    }
+
+    .post-game__text {
+      color: var(--ink-2);
+      font-size: 12.5px;
+      line-height: 1.4;
+    }
+
+    .post-game__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .post-game__actions .btn { flex: 1 1 150px; }
+
+    /* ---------- 12. Forca ---------- */
+    .forca-card {
+      position: relative;
+      width: min(100%, 560px);
+      margin: 0 auto;
+      padding: clamp(17px, 3.4vw, 26px);
+      overflow: hidden;
+      border: 1.5px solid var(--ink);
+      border-radius: 26px;
+      background: var(--surface);
+      box-shadow: 6px 6px 0 var(--shadow);
+    }
+
+    .forca-card::after {
+      content: "?";
+      position: absolute;
+      top: -42px;
+      right: 4px;
+      color: var(--ink);
+      opacity: .055;
+      font-family: var(--font-display);
+      font-size: 180px;
+      font-weight: 700;
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .forca-card > * { position: relative; z-index: 1; }
+
+    .forca-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--ink-2);
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .forca-meta .chip { color: var(--ink); opacity: .8; }
+
+    .forca-clue {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 13px;
+      padding: 10px 12px;
+      border: 1px dashed var(--line);
+      border-radius: 13px;
+      background: var(--paper-2);
+    }
+
+    .forca-clue__label {
+      flex: none;
+      padding-top: 3px;
+      color: var(--accent-text);
+      font-family: var(--font-mono);
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+    }
+
+    .forca-clue p {
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-style: italic;
+      line-height: 1.35;
+    }
+
+    .lives-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .lives {
+      display: flex;
+      align-items: center;
+      gap: clamp(3px, 1vw, 6px);
+    }
+
+    .life {
+      display: block;
+      width: clamp(22px, 4.8vw, 27px);
+      height: clamp(22px, 4.8vw, 27px);
+      line-height: 0;
+    }
+
+    .life svg {
+      width: 100%;
+      height: 100%;
+      fill: var(--coral);
+      stroke: var(--ink);
+      stroke-width: 1.4;
+      transition: fill .22s ease, opacity .22s ease, transform .22s ease;
+    }
+
+    .life.is-lost svg {
+      fill: transparent;
+      stroke: var(--line-strong);
+      opacity: .55;
+    }
+
+    .life.is-breaking svg { animation: heart-break .5s ease; }
+
+    .lives__label {
+      color: var(--ink-2);
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 600;
+      letter-spacing: .05em;
+      white-space: nowrap;
+    }
+
+    .word-slots {
+      display: flex;
+      justify-content: center;
+      gap: clamp(3px, 1.1vw, 8px);
+      margin-top: clamp(17px, 3vw, 24px);
+      padding-bottom: 2px;
+    }
+
+    .letter-slot {
+      display: grid;
+      place-items: center;
+      flex: 1 1 0;
+      max-width: 48px;
+      height: clamp(42px, 8.6vw, 56px);
+      min-width: 0;
+      border-bottom: 3px solid var(--ink);
+      border-radius: 3px 3px 0 0;
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: clamp(21px, 5vw, 30px);
+      font-weight: 700;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+
+    .letter-slot.is-revealed {
+      border-bottom-color: var(--coral);
+      animation: letter-in .38s cubic-bezier(.2, .8, .3, 1.25);
+    }
+
+    .letter-slot.is-missed {
+      border-bottom-color: var(--coral);
+      color: var(--accent-text);
+    }
+
+    .forca-card.is-shaking { animation: shake .38s ease; }
+
+    /* ---------- 13. Sidebar de jogo ---------- */
+    .game-side {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .side-card {
+      padding: 17px;
+      border: 1.5px solid var(--line-strong);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      box-shadow: 4px 4px 0 var(--shadow);
+    }
+
+    .side-card__title {
+      margin-bottom: 12px;
+      color: var(--ink-2);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .11em;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .legend { display: grid; gap: 9px; }
+
+    .legend__row {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--ink-2);
+      font-size: 12.5px;
+      line-height: 1.35;
+    }
+
+    .legend__tile {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      flex: none;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      font-family: var(--font-ui);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .legend__tile--correct { background: var(--tile-correct); color: var(--tile-correct-ink); }
+    .legend__tile--present { background: var(--tile-present); color: var(--tile-present-ink); }
+    .legend__tile--absent { background: var(--tile-absent); color: var(--tile-absent-ink); }
+
+    .side-card .text-link { margin-top: 13px; font-size: 11.5px; }
+
+    .side-card--tip {
+      position: relative;
+      overflow: hidden;
+      background: var(--yellow-soft);
+    }
+
+    .side-card--tip::after {
+      content: "\201C";
+      position: absolute;
+      top: -40px;
+      right: 8px;
+      color: var(--coral);
+      opacity: .28;
+      font-family: var(--font-display);
+      font-size: 118px;
+      font-weight: 700;
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .side-card--tip .tip-label {
+      margin-bottom: 5px;
+      color: var(--accent-text);
+      font-family: var(--font-mono);
+      font-size: 8.5px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .side-card--tip p:not(.tip-label) {
+      position: relative;
+      z-index: 1;
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-style: italic;
+      line-height: 1.38;
+    }
+
+    .game-side > .text-link { align-self: flex-start; padding-inline: 2px; }
+
+    /* ---------- 14. Diálogos ---------- */
+    .dialog {
+      width: min(92vw, 520px);
+      max-width: none;
+      max-height: calc(100dvh - 24px);
+      margin: auto;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      overflow: visible;
+    }
+
+    .dialog--help { width: min(92vw, 820px); }
+
+    .dialog::backdrop {
+      background: var(--backdrop);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+    }
+
+    .dialog[open]::backdrop { animation: backdrop-in .22s ease both; }
+
+    .dialog__panel {
+      position: relative;
+      max-height: calc(100dvh - 32px);
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border: 1.5px solid var(--ink);
+      border-radius: var(--radius-xl);
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 10px 10px 0 var(--shadow);
+    }
+
+    .dialog[open] .dialog__panel { animation: dialog-in .28s cubic-bezier(.2, .8, .3, 1.08) both; }
+
+    .dialog__close {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      z-index: 6;
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      padding: 0;
+      border: 1.5px solid var(--ink);
+      border-radius: 50%;
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 2px 2px 0 var(--shadow);
+      transition: transform .18s ease, background-color .18s ease;
+    }
+
+    .dialog__close:hover { transform: rotate(6deg); background: var(--coral); color: var(--deep); }
+
+    /* ---------- 15. Como jogar ---------- */
+    .help__head {
+      padding: 27px 26px 18px;
+      border-bottom: 1px dashed var(--line);
+    }
+
+    .help__head h2 {
+      margin-top: 7px;
+      padding-right: 38px;
+      font-family: var(--font-display);
+      font-size: clamp(2rem, 4vw, 2.65rem);
+      font-weight: 700;
+      letter-spacing: -.04em;
+      line-height: 1;
+    }
+
+    .help__intro {
+      max-width: 56ch;
+      margin-top: 9px;
+      color: var(--ink-2);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .help__grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 22px;
+      padding: 22px 26px 24px;
+    }
+
+    @media (min-width: 690px) {
+      .help__grid { grid-template-columns: 1fr 1fr; gap: 28px; }
+    }
+
+    .help-mode { padding-top: 15px; border-top: 1px solid var(--line); }
+
+    .help-mode__top {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .help-mode__num {
+      color: var(--accent-text);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+
+    .help-mode h3 {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -.03em;
+      line-height: 1.1;
+    }
+
+    .help-mode__lead {
+      margin-top: 7px;
+      color: var(--ink-2);
+      font-size: 12.5px;
+      line-height: 1.5;
+    }
+
+    .help-legend {
+      display: grid;
+      gap: 8px;
+      margin: 13px 0;
+    }
+
+    .help-legend .legend__row { font-size: 12px; }
+
+    .help-steps { display: grid; gap: 7px; margin-top: 12px; }
+
+    .help-steps li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      color: var(--ink-2);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .help-steps li b {
+      display: grid;
+      place-items: center;
+      width: 18px;
+      height: 18px;
+      flex: none;
+      margin-top: 1px;
+      border: 1px solid var(--line-strong);
+      border-radius: 50%;
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 8px;
+      font-weight: 700;
+    }
+
+    .help-hearts {
+      display: flex;
+      gap: 3px;
+      margin: 10px 0 4px;
+      color: var(--coral);
+      font-family: var(--font-display);
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .help-kbd-note {
+      color: var(--muted);
+      font-size: 11.5px;
+      line-height: 1.45;
+    }
+
+    .help__foot {
+      position: sticky;
+      bottom: 0;
+      z-index: 4;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 26px;
+      border-top: 1px solid var(--line);
+      background: var(--paper-2);
+    }
+
+    kbd {
+      display: inline-block;
+      padding: 1px 5px;
+      border: 1px solid var(--line-strong);
+      border-bottom-width: 2px;
+      border-radius: 5px;
+      background: var(--surface);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 520px) {
+      .help__head, .help__grid, .help__foot { padding-left: 20px; padding-right: 20px; }
+      .help__foot .btn { width: 100%; }
+    }
+
+    /* ---------- 16. Resultado ---------- */
+    .result {
+      position: relative;
+      overflow: hidden;
+      padding: 28px 26px 21px;
+      text-align: center;
+    }
+
+    .result__kicker {
+      position: relative;
+      z-index: 2;
+      color: var(--accent-text);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .result__title {
+      position: relative;
+      z-index: 2;
+      margin-top: 8px;
+      font-family: var(--font-display);
+      font-size: clamp(2.1rem, 5vw, 2.8rem);
+      font-weight: 700;
+      letter-spacing: -.045em;
+      line-height: 1;
+    }
+
+    .result__sub {
+      position: relative;
+      z-index: 2;
+      margin-top: 17px;
+      color: var(--ink-2);
+      font-family: var(--font-mono);
+      font-size: 8.5px;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .result__word {
+      position: relative;
+      z-index: 2;
+      display: inline-block;
+      margin: 2px 0 0;
+      padding: 0 .14em;
+      background: linear-gradient(transparent 61%, var(--yellow) 61%, var(--yellow) 92%, transparent 92%);
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: clamp(3rem, 9vw, 4rem);
+      font-weight: 700;
+      letter-spacing: .01em;
+      line-height: 1.15;
+      text-transform: uppercase;
+      animation: word-in .5s cubic-bezier(.2, .8, .3, 1.2) both;
+    }
+
+    .dialog[data-outcome="lose"] .result__word {
+      background: linear-gradient(transparent 61%, var(--coral-soft) 61%, var(--coral-soft) 92%, transparent 92%);
+    }
+
+    .result__stats {
+      position: relative;
+      z-index: 2;
+      margin-top: 3px;
+      color: var(--ink-2);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .share-card {
+      position: relative;
+      z-index: 2;
+      width: min(100%, 344px);
+      margin: 17px auto 18px;
+      padding: 14px 16px 12px;
+      border: 1.5px solid var(--ink);
+      border-radius: 16px;
+      background: var(--share-bg);
+      color: var(--share-ink);
+      box-shadow: 4px 4px 0 var(--coral);
+      text-align: center;
+    }
+
+    .share-card__label {
+      display: block;
+      color: rgba(255, 246, 231, .6);
+      font-family: var(--font-mono);
+      font-size: 8px;
+      font-weight: 600;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .share-card__grid {
+      display: grid;
+      gap: 4px;
+      margin: 9px 0 10px;
+      font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+      font-size: clamp(18px, 4.8vw, 22px);
+      line-height: 1.15;
+      letter-spacing: .08em;
+    }
+
+    .share-card__row { white-space: nowrap; }
+
+    .share-card__footer {
+      display: block;
+      padding-top: 8px;
+      border-top: 1px dashed rgba(255, 246, 231, .22);
+      color: rgba(255, 246, 231, .55);
+      font-family: var(--font-mono);
+      font-size: 7.5px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .result__actions {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      gap: 8px;
+      width: min(100%, 344px);
+      margin: 0 auto;
+    }
+
+    @media (min-width: 560px) {
+      .result__actions { grid-template-columns: 1.32fr 1fr; }
+    }
+
+    .result__board-link {
+      position: relative;
+      z-index: 2;
+      margin-top: 14px;
+      border: 0;
+      background: none;
+      color: var(--ink-2);
+      font-size: 11px;
+      font-weight: 700;
+      text-decoration: underline;
+      text-decoration-color: var(--line-strong);
+      text-underline-offset: 3px;
+      cursor: pointer;
+    }
+    .result__board-link:hover { color: var(--ink); }
+
+    .result__confetti {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .confetti {
+      position: absolute;
+      top: -16px;
+      left: var(--x);
+      width: 8px;
+      height: 12px;
+      border-radius: 2px;
+      background: var(--c);
+      opacity: 0;
+      transform: rotate(var(--r));
+    }
+
+    .confetti:nth-child(3n) { width: 7px; height: 7px; border-radius: 50%; }
+
+    .is-celebrating .confetti {
+      animation: confetti-fall 2s cubic-bezier(.18, .7, .32, 1) var(--d) forwards;
+    }
+
+    /* ---------- 17. Toast + selo de protótipo ---------- */
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      z-index: 120;
+      max-width: calc(100vw - 32px);
+      padding: 10px 16px;
+      border: 1.5px solid var(--cream);
+      border-radius: 999px;
+      background: var(--deep);
+      color: var(--cream);
+      box-shadow: 5px 5px 0 var(--coral);
+      font-size: 12.5px;
+      font-weight: 650;
+      line-height: 1.3;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, 14px);
+      transition: opacity .2s ease, transform .2s ease;
+    }
+
+    .toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+
+    .proto-badge {
+      position: fixed;
+      left: 13px;
+      bottom: 13px;
+      z-index: 80;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 10px;
+      border: 1px solid rgba(255, 246, 231, .24);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--deep) 92%, transparent);
+      color: var(--cream);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, .2);
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: .01em;
+      line-height: 1.2;
+      pointer-events: none;
+    }
+
+    .proto-badge::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      flex: none;
+      border-radius: 50%;
+      background: var(--coral);
+      box-shadow: 0 0 0 3px rgba(255, 107, 87, .16);
+    }
+
+    @media (max-width: 640px) {
+      .proto-badge {
+        left: 8px;
+        bottom: 8px;
+        padding: 6px 8px;
+        font-size: 8px;
+      }
+    }
+
+    /* Desktop compacto: mantém os dois modos inteiros na primeira dobra. */
+    @media (min-width: 960px) {
+      .hero { padding-bottom: 16px; }
+      .hero__art { min-height: 270px; }
+      .modes { padding-top: 30px; }
+      .section-head { margin-bottom: 18px; }
+    }
+
+    /* Jogos em telas mais baixas: compacta para o teclado não ficar
+       escondido atrás do selo de protótipo. */
+    @media (max-width: 639px) and (max-height: 820px) {
+      .game { padding-top: 12px; }
+      .game-head {
+        gap: 8px;
+        padding-bottom: 10px;
+        margin-bottom: 12px;
+      }
+      .game-title { font-size: 2.05rem; }
+      .game-sub { font-size: 12px; }
+      .board { width: min(100%, 302px); }
+      .keyboard { margin-top: 12px; }
+      .key { height: 44px; }
+    }
+
+    @media (max-width: 639px) and (max-height: 740px) {
+      .game-sub { display: none; }
+      .game-title { font-size: 1.9rem; }
+      .game-head { padding-bottom: 8px; margin-bottom: 8px; }
+      .board { width: min(100%, 272px); }
+    }
+
+    /* Telas bem curtas (ex.: 360×640): cabeçalho enxuto para o jogo
+       inteiro caber acima do selo, sem esconder o teclado. */
+    @media (max-width: 639px) and (max-height: 680px) {
+      .game { padding-top: 8px; }
+      .game-head { gap: 4px; padding-bottom: 6px; margin-bottom: 6px; }
+      .game-head .eyebrow { display: none; }
+      .game-title { margin: 0; font-size: 1.65rem; }
+      .status-pill { padding: 5px 9px; font-size: 9px; }
+      .board { width: min(100%, 252px); }
+      .keyboard { margin-top: 8px; gap: 4px; }
+      .keyboard__row { gap: 3px; }
+      .key { height: 40px; }
+    }
+
+    @media (min-width: 640px) and (max-width: 979px) {
+      .game-head {
+        flex-direction: row;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        padding-bottom: 12px;
+        margin-bottom: 16px;
+      }
+      .game-title { font-size: 2.6rem; }
+      .board { width: min(100%, 360px); }
+      .keyboard { width: min(100%, 460px); margin-top: 16px; }
+      .key { height: 45px; }
+    }
+
+    @media (min-width: 640px) and (max-width: 979px) and (max-height: 840px) {
+      .game-sub { display: none; }
+      .game-title { font-size: 2.3rem; }
+      .game-head { padding-bottom: 10px; margin-bottom: 10px; }
+      .board { width: min(100%, 320px); }
+      .keyboard { width: min(100%, 420px); margin-top: 14px; }
+      .key { height: 42px; }
+    }
+
+    /* ---------- 18. Movimento ---------- */
+    @keyframes bob {
+      0%, 100% { translate: 0 0; }
+      50% { translate: 0 -10px; }
+    }
+
+    @keyframes twinkle {
+      0%, 100% { opacity: .45; transform: scale(.86) rotate(0deg); }
+      50% { opacity: 1; transform: scale(1.08) rotate(12deg); }
+    }
+
+    @keyframes marquee {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
+    }
+
+    @keyframes tile-pop {
+      0% { transform: scale(.92); }
+      70% { transform: scale(1.035); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes tile-flip {
+      0% { transform: rotateX(0deg); }
+      50% { transform: rotateX(90deg); }
+      100% { transform: rotateX(0deg); }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-6px); }
+      40% { transform: translateX(5px); }
+      60% { transform: translateX(-3px); }
+      80% { transform: translateX(2px); }
+    }
+
+    @keyframes letter-in {
+      0% { transform: translateY(6px) scale(.86); opacity: .2; }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    @keyframes heart-break {
+      0% { transform: scale(1) rotate(0deg); }
+      35% { transform: scale(1.3) rotate(-8deg); }
+      70% { transform: scale(.78) rotate(7deg); opacity: .6; }
+      100% { transform: scale(1) rotate(0deg); }
+    }
+
+    @keyframes dialog-in {
+      from { opacity: 0; transform: translateY(14px) scale(.975); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes backdrop-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes word-in {
+      from { opacity: 0; transform: translateY(8px) scale(.92); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes confetti-fall {
+      0% { opacity: 1; transform: translateY(-10px) rotate(0deg); }
+      100% { opacity: 0; transform: translateY(470px) rotate(330deg); }
+    }
+
+    /* Acessibilidade: sem movimento para quem prefere menos estímulo. */
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+      .float-tile, .spark, .ticker__track, .result__confetti { animation: none !important; }
+      .result__confetti { display: none !important; }
+    }
+
+    /* Ajuste fino para telas muito estreitas. */
+    @media (max-width: 380px) {
+      .container { width: calc(100% - 28px); }
+      .wordmark--hero { font-size: 78px; }
+      .mode-card { padding: 20px; }
+      .mini-tile { width: 37px; }
+      .key { border-radius: 8px; }
+      .game-head { padding-bottom: 16px; }
+      .result { padding-inline: 20px; }
+      .share-card { padding-inline: 12px; }
+    }
+  </style>
+</head>
+
+<body>
+  <a class="skip-link" href="#app">Pular para o conteúdo</a>
+
+  <div class="site-shell">
+    <!-- ===== Header ===== -->
+    <header class="topbar">
+      <div class="container topbar__inner">
+        <div class="topbar__left">
+          <button class="topbar__back" id="backHome" type="button" aria-label="Voltar ao início" hidden>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M19 12H5M11 18l-6-6 6-6"/>
+            </svg>
+            <span class="back-label">Início</span>
+          </button>
+
+          <a class="brand" href="#home" data-go-home aria-label="Deduzi — ir para o início">
+            <span class="wordmark wordmark--brand" aria-hidden="true">
+              <span class="wordmark__text">Deduz</span>
+              <span class="wordmark__i"><span class="wordmark__i-letter">i</span></span>
+            </span>
+          </a>
+        </div>
+
+        <div class="topbar__right">
+          <button class="icon-btn btn-help js-open-help" type="button" aria-label="Como jogar" aria-haspopup="dialog" aria-controls="helpDialog">
+            <span class="icon-btn__q" aria-hidden="true">?</span>
+            <span class="btn-help__label">Como jogar</span>
+          </button>
+
+          <button class="icon-btn js-theme-toggle" type="button" aria-label="Ativar tema escuro" title="Alternar tema claro e escuro">
+            <svg class="icon-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20.6 14.1A8.6 8.6 0 0 1 9.9 3.4 8.7 8.7 0 1 0 20.6 14.1Z"/>
+            </svg>
+            <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="app" tabindex="-1">
+      <!-- ===== HOME ===== -->
+      <section class="screen home" id="homeScreen" data-screen="home" aria-labelledby="homeTitle">
+        <div class="container">
+          <div class="hero">
+            <div class="hero__copy">
+              <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>Jogo de palavras · PT-BR</p>
+
+              <h1 class="hero__title" id="homeTitle">
+                <span class="wordmark wordmark--hero" role="img" aria-label="Deduzi">
+                  <span class="wordmark__text" aria-hidden="true">Deduz</span>
+                  <span class="wordmark__i" aria-hidden="true"><span class="wordmark__i-letter">i</span></span>
+                </span>
+              </h1>
+
+              <p class="hero__tagline">
+                Menos sorte.
+                <span class="hero__tagline-accent">Mais dedução.
+                  <svg class="hero__scribble" viewBox="0 0 240 14" preserveAspectRatio="none" aria-hidden="true">
+                    <path d="M2 9C48 1 82 11 121 5c37-6 68 4 117-2" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+                  </svg>
+                </span>
+              </p>
+
+              <p class="hero__sub">Duas formas de descobrir a palavra escondida. Jogue no seu ritmo, sem login e sem anúncios.</p>
+
+              <div class="hero__actions">
+                <a class="btn btn--primary" href="#modos">
+                  Escolher um modo
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M5 12h14M13 6l6 6-6 6"/>
+                  </svg>
+                </a>
+                <button class="btn btn--ghost js-open-help" type="button" aria-haspopup="dialog" aria-controls="helpDialog">Como jogar</button>
+              </div>
+
+              <ul class="hero__meta" aria-label="Destaques do jogo">
+                <li>Grátis</li>
+                <li>Sem cadastro</li>
+                <li>Feito em PT-BR</li>
+              </ul>
+            </div>
+
+            <div class="hero__art" aria-hidden="true">
+              <div class="hero__dots"></div>
+
+              <div class="poster">
+                <div class="poster__head">
+                  <span>Palavra em jogo</span>
+                  <span class="poster__number">Nº 03</span>
+                </div>
+
+                <div class="poster__row">
+                  <span class="poster__tile poster__tile--green">D</span>
+                  <span class="poster__tile poster__tile--yellow">E</span>
+                  <span class="poster__tile">D</span>
+                  <span class="poster__tile">U</span>
+                  <span class="poster__tile poster__tile--q">?</span>
+                </div>
+
+                <p class="poster__quote">“Toda palavra é uma pista.”</p>
+
+                <div class="poster__foot">
+                  <div class="poster__hearts">
+                    <span>♥</span><span>♥</span><span>♥</span><span>♥</span><span>♥</span><span>♥</span>
+                  </div>
+                  <span class="poster__tag">6 vidas · 1 palavra</span>
+                </div>
+              </div>
+
+              <span class="float-tile float-tile--a">A</span>
+              <span class="float-tile float-tile--heart">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 21s-7.5-4.8-9.4-9.2C.9 8.4 3 4.8 6.6 4.3c2-.3 3.9.7 5.4 2.4 1.5-1.7 3.4-2.7 5.4-2.4 3.6.5 5.7 4.1 4 7.5C19.5 16.2 12 21 12 21Z"/>
+                </svg>
+              </span>
+
+              <div class="hero-sticker">
+                <span>2 modos</span>
+                <strong>1 cérebro</strong>
+              </div>
+
+              <svg class="spark spark--1" width="30" height="30" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">
+                <path d="M16 1c1 8 7 14 15 15-8 1-14 7-15 15-1-8-7-14-15-15C9 15 15 9 16 1Z"/>
+              </svg>
+              <svg class="spark spark--2" width="20" height="20" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">
+                <path d="M16 1c1 8 7 14 15 15-8 1-14 7-15 15-1-8-7-14-15-15C9 15 15 9 16 1Z"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modos -->
+        <section class="modes container" id="modos" aria-labelledby="modesTitle">
+          <header class="section-head">
+            <div>
+              <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>Escolha seu modo</p>
+              <h2 id="modesTitle">Duas formas de chegar <em>na palavra.</em></h2>
+            </div>
+            <p class="section-head__note">Dois ritmos, a mesma vontade de descobrir. Troque de modo quando quiser.</p>
+          </header>
+
+          <div class="modes__grid">
+            <a class="mode-card mode-card--word" href="#wordguess" data-start-mode="wordguess" aria-label="Jogar WordGuess: descubra uma palavra de cinco letras em seis tentativas">
+              <div class="mode-card__top">
+                <span class="chip">Modo 01</span>
+                <span class="mode-card__tag">Dedução</span>
+              </div>
+
+              <div class="mode-card__art" aria-hidden="true">
+                <div class="mini-board">
+                  <span class="mini-tile mini-tile--correct">P</span>
+                  <span class="mini-tile mini-tile--present">I</span>
+                  <span class="mini-tile mini-tile--absent">S</span>
+                  <span class="mini-tile">T</span>
+                  <span class="mini-tile">A</span>
+                </div>
+                <span class="mode-card__caption">Cada cor é uma pista</span>
+              </div>
+
+              <h3 class="mode-card__title">WordGuess</h3>
+              <p class="mode-card__desc">Cinco letras, seis tentativas. A cada rodada, as cores contam o que está no lugar certo.</p>
+
+              <div class="mode-card__meta" aria-hidden="true">
+                <span>5 letras</span>
+                <span>6 tentativas</span>
+              </div>
+
+              <span class="mode-card__cta">
+                Jogar WordGuess
+                <span class="mode-card__arrow" aria-hidden="true">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 12h14M13 6l6 6-6 6"/>
+                  </svg>
+                </span>
+              </span>
+            </a>
+
+            <a class="mode-card mode-card--forca" href="#forca" data-start-mode="forca" aria-label="Jogar Forca: descubra a palavra letra por letra antes de perder seis vidas">
+              <div class="mode-card__top">
+                <span class="chip">Modo 02</span>
+                <span class="mode-card__tag">Palpite</span>
+              </div>
+
+              <div class="mode-card__art" aria-hidden="true">
+                <div class="forca-preview">
+                  <div class="forca-preview__word">
+                    <span class="forca-preview__slot">D</span>
+                    <span class="forca-preview__slot">E</span>
+                    <span class="forca-preview__slot is-blank">·</span>
+                    <span class="forca-preview__slot">U</span>
+                    <span class="forca-preview__slot is-blank">·</span>
+                    <span class="forca-preview__slot">I</span>
+                    <span class="forca-preview__slot is-blank">·</span>
+                  </div>
+                  <div class="forca-preview__foot">
+                    <span class="forca-preview__hearts"><span>♥</span><span>♥</span><span>♥</span><span>♥</span><span>♥</span><span>♥</span></span>
+                    <span>6 vidas</span>
+                  </div>
+                </div>
+              </div>
+
+              <h3 class="mode-card__title">Forca</h3>
+              <p class="mode-card__desc">Uma palavra escondida, seis vidas e um teclado. Arrisque letras até ela aparecer.</p>
+
+              <div class="mode-card__meta" aria-hidden="true">
+                <span>6 vidas</span>
+                <span>Palavra variável</span>
+              </div>
+
+              <span class="mode-card__cta">
+                Jogar Forca
+                <span class="mode-card__arrow" aria-hidden="true">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 12h14M13 6l6 6-6 6"/>
+                  </svg>
+                </span>
+              </span>
+            </a>
+          </div>
+        </section>
+
+        <!-- Faixa de marca -->
+        <div class="ticker" aria-hidden="true">
+          <div class="ticker__track">
+            <div class="ticker__group">
+              <span>Palavra</span><i>✳</i><span>Dedução</span><i>✳</i><span>Descoberta</span><i>✳</i><span>Palpite</span><i>✳</i><span>Sem pressa</span><i>✳</i><span>Palavra</span><i>✳</i><span>Dedução</span><i>✳</i><span>Descoberta</span><i>✳</i>
+            </div>
+            <div class="ticker__group">
+              <span>Palavra</span><i>✳</i><span>Dedução</span><i>✳</i><span>Descoberta</span><i>✳</i><span>Palpite</span><i>✳</i><span>Sem pressa</span><i>✳</i><span>Palavra</span><i>✳</i><span>Dedução</span><i>✳</i><span>Descoberta</span><i>✳</i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Promessas de marca -->
+        <section class="promise" aria-label="Por que jogar Deduzi">
+          <div class="container promise__inner">
+            <div class="promise__item">
+              <span class="promise__icon promise__icon--coral" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 3v18M3 12h18"/>
+                </svg>
+              </span>
+              <div>
+                <strong>Sem login</strong>
+                <p>Nada de conta, e-mail ou senha. Abriu, jogou.</p>
+              </div>
+            </div>
+            <div class="promise__item">
+              <span class="promise__icon promise__icon--yellow" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 32 32" fill="currentColor">
+                  <path d="M16 1c1 8 7 14 15 15-8 1-14 7-15 15-1-8-7-14-15-15C9 15 15 9 16 1Z"/>
+                </svg>
+              </span>
+              <div>
+                <strong>Zero anúncios</strong>
+                <p>Só você e as palavras. Nenhum banner no caminho.</p>
+              </div>
+            </div>
+            <div class="promise__item">
+              <span class="promise__icon promise__icon--lilac" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="8.5"/>
+                  <path d="M12 7v5l3 2"/>
+                </svg>
+              </span>
+              <div>
+                <strong>No seu ritmo</strong>
+                <p>Sem cronômetro. Pense, erre e tente de novo.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <footer class="footer">
+          <div class="container footer__inner">
+            <div class="footer__brand">
+              <p class="footer__logo">Deduzi<span>.</span></p>
+              <p class="footer__tag">Menos sorte. Mais dedução.</p>
+            </div>
+
+            <nav class="footer__nav" aria-label="Rodapé">
+              <button class="text-link" type="button" data-start-mode="wordguess">WordGuess</button>
+              <button class="text-link" type="button" data-start-mode="forca">Forca</button>
+              <button class="text-link js-open-help" type="button" aria-haspopup="dialog" aria-controls="helpDialog">Como jogar</button>
+            </nav>
+
+            <p class="footer__meta">Jogo casual em português · Protótipo visual 03 · 2026</p>
+          </div>
+        </footer>
+      </section>
+
+      <!-- ===== WORDGUESS ===== -->
+      <section class="screen game" id="wordguessScreen" data-screen="wordguess" aria-labelledby="wgTitle" hidden>
+        <div class="container game__container">
+          <header class="game-head">
+            <div>
+              <p class="eyebrow eyebrow--coral"><span class="eyebrow__dot" aria-hidden="true"></span>Modo 01 · Dedução</p>
+              <h1 class="game-title" id="wgTitle" tabindex="-1">WordGuess<span>.</span></h1>
+              <p class="game-sub">
+                <span class="game-sub__long">Descubra a palavra de cinco letras em até seis tentativas.</span>
+                <span class="game-sub__short">Cinco letras, seis tentativas.</span>
+              </p>
+            </div>
+
+            <div class="status-pill" aria-hidden="true">
+              <span id="wgAttemptText">Tentativa 1 de 6</span>
+              <span class="attempt-dots" id="wgDots"></span>
+            </div>
+          </header>
+
+          <div class="game-layout">
+            <div class="game-play">
+              <div class="board" id="wgBoard" role="group" aria-label="Tabuleiro de WordGuess: seis tentativas de cinco letras"></div>
+              <p class="sr-only" id="wgStatus" role="status" aria-live="polite"></p>
+
+              <div class="keyboard" id="wgKeyboard" role="group" aria-label="Teclado virtual de WordGuess"></div>
+
+              <div class="post-game" id="wgPostGame" hidden>
+                <p class="post-game__title" id="wgPostTitle">Você deduziu!</p>
+                <p class="post-game__text" id="wgPostText">A palavra era FESTA.</p>
+                <div class="post-game__actions">
+                  <button class="btn btn--primary btn--small" id="wgShare" type="button">Compartilhar resultado</button>
+                  <button class="btn btn--ghost btn--small" id="wgAgain" type="button">Jogar de novo</button>
+                </div>
+              </div>
+            </div>
+
+            <aside class="game-side" aria-label="Ajuda e ações do WordGuess">
+              <section class="side-card">
+                <h2 class="side-card__title">Como ler as cores</h2>
+                <div class="legend">
+                  <div class="legend__row">
+                    <span class="legend__tile legend__tile--correct" aria-hidden="true">F</span>
+                    <span>Letra certa, no lugar certo</span>
+                  </div>
+                  <div class="legend__row">
+                    <span class="legend__tile legend__tile--present" aria-hidden="true">E</span>
+                    <span>Na palavra, mas em outro lugar</span>
+                  </div>
+                  <div class="legend__row">
+                    <span class="legend__tile legend__tile--absent" aria-hidden="true">S</span>
+                    <span>Fora da palavra</span>
+                  </div>
+                </div>
+                <button class="text-link js-open-help" type="button" aria-haspopup="dialog" aria-controls="helpDialog">Ver todas as regras</button>
+              </section>
+
+              <section class="side-card side-card--tip">
+                <p class="tip-label">Dica de dedução</p>
+                <p>Letras repetidas contam individualmente. Cada A da palavra recebe sua própria pista.</p>
+              </section>
+
+              <button class="btn btn--ink btn--full" id="wgNew" type="button">Nova palavra</button>
+              <button class="text-link" type="button" data-start-mode="forca">Prefere arriscar? Jogar Forca</button>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== FORCA ===== -->
+      <section class="screen game" id="forcaScreen" data-screen="forca" aria-labelledby="forcaTitle" hidden>
+        <div class="container game__container">
+          <header class="game-head">
+            <div>
+              <p class="eyebrow eyebrow--coral"><span class="eyebrow__dot" aria-hidden="true"></span>Modo 02 · Palpite</p>
+              <h1 class="game-title" id="forcaTitle" tabindex="-1">Forca<span>.</span></h1>
+              <p class="game-sub">
+                <span class="game-sub__long">Descubra a palavra letra por letra antes que as seis vidas acabem.</span>
+                <span class="game-sub__short">Seis vidas. Uma palavra escondida.</span>
+              </p>
+            </div>
+
+            <div class="status-pill" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 21s-7.5-4.8-9.4-9.2C.9 8.4 3 4.8 6.6 4.3c2-.3 3.9.7 5.4 2.4 1.5-1.7 3.4-2.7 5.4-2.4 3.6.5 5.7 4.1 4 7.5C19.5 16.2 12 21 12 21Z"/>
+              </svg>
+              <span id="forcaHeadLives">6 vidas</span>
+            </div>
+          </header>
+
+          <div class="game-layout">
+            <div class="game-play">
+              <div class="forca-card" id="forcaCard">
+                <div class="forca-meta">
+                  <span class="chip" id="forcaCategory">Animal</span>
+                  <span id="forcaLength">9 letras</span>
+                </div>
+
+                <div class="forca-clue">
+                  <span class="forca-clue__label">Dica</span>
+                  <p id="forcaClue">Tem duas rodas e não precisa de gasolina.</p>
+                </div>
+
+                <div class="lives-row">
+                  <div class="lives" id="forcaLives" role="img" aria-label="6 de 6 vidas"></div>
+                  <span class="lives__label" id="forcaLivesText">6 de 6 vidas</span>
+                </div>
+
+                <div class="word-slots" id="forcaSlots" role="group" aria-label="Palavra ainda não iniciada"></div>
+              </div>
+
+              <p class="sr-only" id="forcaStatus" role="status" aria-live="polite"></p>
+
+              <div class="keyboard keyboard--forca" id="forcaKeyboard" role="group" aria-label="Teclado virtual de letras da Forca"></div>
+
+              <div class="post-game" id="forcaPostGame" hidden>
+                <p class="post-game__title" id="forcaPostTitle">Palavra completa!</p>
+                <p class="post-game__text" id="forcaPostText">A palavra era BICICLETA.</p>
+                <div class="post-game__actions">
+                  <button class="btn btn--primary btn--small" id="forcaShare" type="button">Compartilhar resultado</button>
+                  <button class="btn btn--ghost btn--small" id="forcaAgain" type="button">Jogar de novo</button>
+                </div>
+              </div>
+            </div>
+
+            <aside class="game-side" aria-label="Ajuda e ações da Forca">
+              <section class="side-card">
+                <h2 class="side-card__title">Entenda o teclado</h2>
+                <div class="legend">
+                  <div class="legend__row">
+                    <span class="legend__tile legend__tile--correct" aria-hidden="true">A</span>
+                    <span>Letra na palavra: revela todas</span>
+                  </div>
+                  <div class="legend__row">
+                    <span class="legend__tile legend__tile--absent" aria-hidden="true">Z</span>
+                    <span>Letra fora: custa uma vida</span>
+                  </div>
+                </div>
+                <button class="text-link js-open-help" type="button" aria-haspopup="dialog" aria-controls="helpDialog">Ver todas as regras</button>
+              </section>
+
+              <section class="side-card side-card--tip">
+                <p class="tip-label">Dica de palpite</p>
+                <p>Comece pelas vogais e pelas letras mais comuns. A dica acima é sua bússola.</p>
+              </section>
+
+              <button class="btn btn--ink btn--full" id="forcaNew" type="button">Nova palavra</button>
+              <button class="text-link" type="button" data-start-mode="wordguess">Prefere deduzir? Jogar WordGuess</button>
+            </aside>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ===== Modal: Como jogar ===== -->
+  <dialog class="dialog dialog--help" id="helpDialog" aria-labelledby="helpTitle">
+    <div class="dialog__panel">
+      <button class="dialog__close" type="button" data-close-help aria-label="Fechar como jogar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18"/>
+        </svg>
+      </button>
+
+      <header class="help__head">
+        <p class="eyebrow eyebrow--coral"><span class="eyebrow__dot" aria-hidden="true"></span>Manual rápido</p>
+        <h2 id="helpTitle">Como jogar</h2>
+        <p class="help__intro">Dois jogos, uma ideia: usar cada pista para chegar na palavra escondida. Escolha um modo e comece a deduzir.</p>
+      </header>
+
+      <div class="help__grid">
+        <section class="help-mode" aria-labelledby="helpWgTitle">
+          <div class="help-mode__top">
+            <span class="help-mode__num">01</span>
+            <h3 id="helpWgTitle">WordGuess</h3>
+          </div>
+          <p class="help-mode__lead">Digite uma palavra de 5 letras e confirme. As cores mostram o quanto você chegou perto.</p>
+
+          <div class="help-legend">
+            <div class="legend__row">
+              <span class="legend__tile legend__tile--correct" aria-hidden="true">F</span>
+              <span><strong>Verde:</strong> letra certa no lugar certo.</span>
+            </div>
+            <div class="legend__row">
+              <span class="legend__tile legend__tile--present" aria-hidden="true">E</span>
+              <span><strong>Amarelo:</strong> a letra existe, mas em outra posição.</span>
+            </div>
+            <div class="legend__row">
+              <span class="legend__tile legend__tile--absent" aria-hidden="true">S</span>
+              <span><strong>Cinza:</strong> a letra não está na palavra.</span>
+            </div>
+          </div>
+
+          <ol class="help-steps">
+            <li><b>1</b><span>Você tem <strong>6 tentativas</strong> para acertar.</span></li>
+            <li><b>2</b><span>Letras repetidas recebem pistas separadas.</span></li>
+            <li><b>3</b><span>No computador, use o teclado físico e <kbd>Enter</kbd>.</span></li>
+          </ol>
+        </section>
+
+        <section class="help-mode" aria-labelledby="helpForcaTitle">
+          <div class="help-mode__top">
+            <span class="help-mode__num">02</span>
+            <h3 id="helpForcaTitle">Forca</h3>
+          </div>
+          <p class="help-mode__lead">Escolha letras para revelar a palavra. Cada erro apaga uma das seis vidas — sem bonequinho, sem pressa.</p>
+
+          <div class="help-hearts" aria-label="Seis vidas" role="img">
+            <span>♥</span><span>♥</span><span>♥</span><span>♥</span><span>♥</span><span>♥</span>
+          </div>
+          <p class="help-mode__lead"><strong>Acertos</strong> revelam todas as ocorrências da letra. <strong>Erros</strong> custam uma vida. Use a dica para encurtar o caminho.</p>
+
+          <ol class="help-steps">
+            <li><b>1</b><span>A palavra pode ter de 4 a 9 letras.</span></li>
+            <li><b>2</b><span>Você vence antes de perder as 6 vidas.</span></li>
+            <li><b>3</b><span>Quer trocar de modo? É só voltar ao início.</span></li>
+          </ol>
+        </section>
+      </div>
+
+      <footer class="help__foot">
+        <p class="help-kbd-note">Atalho: <kbd>Esc</kbd> fecha esta janela. O teclado físico também funciona nos jogos.</p>
+        <button class="btn btn--primary btn--small" type="button" data-close-help>Entendi, bora jogar</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- ===== Modal: Resultado ===== -->
+  <dialog class="dialog dialog--result" id="resultDialog" aria-labelledby="resultTitle" aria-describedby="resultSub resultWord resultStats">
+    <div class="dialog__panel result" id="resultPanel">
+      <div class="result__confetti" id="resultConfetti" aria-hidden="true"></div>
+
+      <button class="dialog__close" type="button" data-close-result aria-label="Fechar resultado">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18"/>
+        </svg>
+      </button>
+
+      <p class="result__kicker" id="resultKicker">WordGuess · resultado</p>
+      <h2 class="result__title" id="resultTitle" tabindex="-1">Você deduziu!</h2>
+      <p class="result__sub" id="resultSub">A palavra era</p>
+      <p class="result__word" id="resultWord">FESTA</p>
+      <p class="result__stats" id="resultStats">4 de 6 tentativas</p>
+
+      <div class="share-card">
+        <span class="share-card__label">Seu resultado</span>
+        <div class="share-card__grid" id="resultGrid" aria-label="Grade de resultado em emojis"></div>
+        <span class="share-card__footer">deduzi · menos sorte, mais dedução</span>
+      </div>
+
+      <div class="result__actions">
+        <button class="btn btn--primary" id="resultShare" type="button">Compartilhar resultado</button>
+        <button class="btn btn--ghost" id="resultAgain" type="button">Jogar de novo</button>
+      </div>
+
+      <button class="result__board-link" type="button" data-close-result>Ver tabuleiro</button>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <div class="proto-badge">Protótipo 03 · Foco em Identidade Visual</div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      /* ======================================================================
+         1. UTILIDADES E DADOS
+         ====================================================================== */
+
+      const $ = (selector, scope = document) => scope.querySelector(selector);
+      const $$ = (selector, scope = document) => Array.from(scope.querySelectorAll(selector));
+      const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+      const reducedMotion = () => motionQuery.matches;
+
+      const KEY_ROWS = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
+      const WORDGUESS_ANSWERS = ["FESTA", "LIVRO", "PRAIA", "MUNDO", "AMIGO"];
+
+      const FORCA_ENTRIES = [
+        { word: "BICICLETA", category: "Objeto", clue: "Tem duas rodas e não precisa de gasolina." },
+        { word: "JANELA", category: "Casa", clue: "Deixa a luz do dia entrar." },
+        { word: "ELEFANTE", category: "Animal", clue: "O maior animal terrestre tem tromba." },
+        { word: "CAMISA", category: "Roupa", clue: "Pode ter botões, gola e mangas." },
+        { word: "BORBOLETA", category: "Animal", clue: "Começa lagarta e termina com asas coloridas." }
+      ];
+
+      const HEART_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.8-9.4-9.2C.9 8.4 3 4.8 6.6 4.3c2-.3 3.9.7 5.4 2.4 1.5-1.7 3.4-2.7 5.4-2.4 3.6.5 5.7 4.1 4 7.5C19.5 16.2 12 21 12 21Z"/></svg>';
+
+      const STATE_LABEL = {
+        correct: "no lugar certo",
+        present: "na palavra, em outra posição",
+        absent: "fora da palavra"
+      };
+      const STATE_RANK = { absent: 1, present: 2, correct: 3 };
+
+      const plural = (n, singular, pluralForm) => `${n} ${n === 1 ? singular : pluralForm}`;
+
+      function pickDifferent(list, previous) {
+        const pool = list.filter((item) => {
+          const value = typeof item === "string" ? item : item.word;
+          return value !== previous;
+        });
+        return pool[Math.floor(Math.random() * pool.length)] || list[0];
+      }
+
+      /* ======================================================================
+         2. ESTADO DOS JOGOS
+         ====================================================================== */
+
+      const wg = {
+        answer: "",
+        last: "",
+        guesses: [],
+        outcomes: [],
+        current: "",
+        row: 0,
+        over: false,
+        won: false,
+        locked: false,
+        started: false
+      };
+
+      const forca = {
+        answer: "",
+        last: "",
+        clue: "",
+        category: "",
+        guessed: new Set(),
+        revealed: new Set(),
+        lives: 6,
+        over: false,
+        won: false,
+        locked: false,
+        started: false
+      };
+
+      /* ======================================================================
+         3. REFERÊNCIAS DE DOM
+         ====================================================================== */
+
+      const screens = {
+        home: $("#homeScreen"),
+        wordguess: $("#wordguessScreen"),
+        forca: $("#forcaScreen")
+      };
+
+      const backHomeButton = $("#backHome");
+      const helpDialog = $("#helpDialog");
+      const resultDialog = $("#resultDialog");
+      const resultPanel = $("#resultPanel");
+      const resultConfetti = $("#resultConfetti");
+      const toastEl = $("#toast");
+
+      const wgBoard = $("#wgBoard");
+      const wgKeyboard = $("#wgKeyboard");
+      const wgStatus = $("#wgStatus");
+      const wgAttemptText = $("#wgAttemptText");
+      const wgDots = $("#wgDots");
+      const wgPostGame = $("#wgPostGame");
+      const wgNew = $("#wgNew");
+
+      const forcaKeyboard = $("#forcaKeyboard");
+      const forcaStatus = $("#forcaStatus");
+      const forcaCard = $("#forcaCard");
+      const forcaLives = $("#forcaLives");
+      const forcaLivesText = $("#forcaLivesText");
+      const forcaHeadLives = $("#forcaHeadLives");
+      const forcaSlots = $("#forcaSlots");
+      const forcaCategory = $("#forcaCategory");
+      const forcaLength = $("#forcaLength");
+      const forcaClue = $("#forcaClue");
+      const forcaPostGame = $("#forcaPostGame");
+      const forcaNew = $("#forcaNew");
+
+      let currentView = "home";
+      let wgResultTimer = null;
+      let forcaResultTimer = null;
+      let helpReturnFocus = null;
+      let resultReturnFocus = null;
+      let toastTimer = null;
+
+      /* ======================================================================
+         4. TEMA
+         ====================================================================== */
+
+      const themeMeta = $('meta[name="theme-color"]');
+      const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+
+      function currentTheme() {
+        return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+      }
+
+      function applyTheme(theme, persist = false) {
+        document.documentElement.dataset.theme = theme;
+        themeMeta.setAttribute("content", theme === "dark" ? "#14112B" : "#FFF6E7");
+
+        $$(".js-theme-toggle").forEach((button) => {
+          const label = theme === "dark" ? "Ativar tema claro" : "Ativar tema escuro";
+          button.setAttribute("aria-label", label);
+          button.setAttribute("title", label);
+        });
+
+        if (persist) {
+          try { localStorage.setItem("deduzi-theme", theme); } catch (error) { /* modo privado */ }
+        }
+      }
+
+      function toggleTheme() {
+        applyTheme(currentTheme() === "dark" ? "light" : "dark", true);
+      }
+
+      /* ======================================================================
+         5. NAVEGAÇÃO ENTRE TELAS
+         ====================================================================== */
+
+      function syncModalLock() {
+        const hasOpenDialog = Boolean(document.querySelector("dialog[open]"));
+        document.body.classList.toggle("modal-open", hasOpenDialog);
+      }
+
+      function clearResultTimers() {
+        window.clearTimeout(wgResultTimer);
+        window.clearTimeout(forcaResultTimer);
+      }
+
+      function showView(view) {
+        if (!screens[view]) return;
+
+        currentView = view;
+
+        Object.entries(screens).forEach(([name, section]) => {
+          section.hidden = name !== view;
+        });
+
+        backHomeButton.hidden = view === "home";
+        document.body.dataset.view = view;
+        toastEl.classList.remove("is-visible");
+
+        clearResultTimers();
+        if (resultDialog.open) resultDialog.close();
+        if (helpDialog.open) helpDialog.close();
+
+        try {
+          history.replaceState(null, "", `#${view}`);
+        } catch (error) { /* file:// em alguns navegadores */ }
+
+        document.title = view === "wordguess"
+          ? "WordGuess · Deduzi"
+          : view === "forca"
+            ? "Forca · Deduzi"
+            : "Deduzi — Menos sorte, mais dedução";
+
+        window.scrollTo({ top: 0, behavior: "auto" });
+        syncModalLock();
+      }
+
+      function focusTitle(selector) {
+        requestAnimationFrame(() => {
+          const title = $(selector);
+          if (title) title.focus({ preventScroll: true });
+        });
+      }
+
+      function openMode(mode, options = {}) {
+        if (!screens[mode]) return;
+
+        showView(mode);
+
+        if (mode === "wordguess") {
+          if (!wg.started || wg.over || options.fresh) {
+            startWordGuess();
+          } else {
+            updateWgActiveRow();
+            focusTitle("#wgTitle");
+          }
+        } else {
+          if (!forca.started || forca.over || options.fresh) {
+            startForca();
+          } else {
+            focusTitle("#forcaTitle");
+          }
+        }
+      }
+
+      /* ======================================================================
+         6. DIÁLOGOS ACESSÍVEIS
+         ====================================================================== */
+
+      function openHelp(trigger) {
+        if (helpDialog.open) return;
+        helpReturnFocus = trigger || document.activeElement;
+        helpDialog.showModal();
+        syncModalLock();
+        const closeButton = $(".dialog__close", helpDialog);
+        if (closeButton) closeButton.focus({ preventScroll: true });
+      }
+
+      function openResultDialog() {
+        if (resultDialog.open || helpDialog.open) return;
+
+        resultReturnFocus = document.activeElement;
+        resultDialog.showModal();
+        syncModalLock();
+
+        requestAnimationFrame(() => {
+          const title = $("#resultTitle");
+          if (title) title.focus({ preventScroll: true });
+        });
+      }
+
+      helpDialog.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          helpDialog.close();
+        }
+      });
+
+      resultDialog.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          resultDialog.close();
+        }
+      });
+
+      helpDialog.addEventListener("close", () => {
+        syncModalLock();
+        const target = helpReturnFocus;
+        helpReturnFocus = null;
+        if (target && document.contains(target) && target.focus) {
+          target.focus({ preventScroll: true });
+        }
+      });
+
+      resultDialog.addEventListener("close", () => {
+        resultPanel.classList.remove("is-celebrating");
+        syncModalLock();
+
+        const target = resultReturnFocus;
+        resultReturnFocus = null;
+        if (target && document.contains(target) && target.offsetParent !== null && target.focus) {
+          target.focus({ preventScroll: true });
+        }
+      });
+
+      /* Fecha ao clicar no backdrop (o clique chega ao próprio <dialog>). */
+      [helpDialog, resultDialog].forEach((dialog) => {
+        dialog.addEventListener("click", (event) => {
+          if (event.target === dialog) dialog.close();
+        });
+      });
+
+      $$("[data-close-help]").forEach((button) => {
+        button.addEventListener("click", () => helpDialog.close());
+      });
+
+      $$("[data-close-result]").forEach((button) => {
+        button.addEventListener("click", () => resultDialog.close());
+      });
+
+      $$(".js-open-help").forEach((button) => {
+        button.addEventListener("click", () => openHelp(button));
+      });
+
+      /* ======================================================================
+         7. TOAST E ÁREA DE TRANSFERÊNCIA
+         ====================================================================== */
+
+      function showToast(message) {
+        toastEl.textContent = message;
+        toastEl.classList.add("is-visible");
+        window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(() => {
+          toastEl.classList.remove("is-visible");
+        }, 2700);
+      }
+
+      async function copyText(text) {
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return true;
+          }
+        } catch (error) { /* tenta o fallback abaixo */ }
+
+        try {
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.setAttribute("readonly", "");
+          textarea.style.position = "fixed";
+          textarea.style.top = "-1000px";
+          textarea.style.opacity = "0";
+          document.body.appendChild(textarea);
+          textarea.select();
+          const copied = document.execCommand("copy");
+          textarea.remove();
+          return copied;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      /* ======================================================================
+         8. TECLADOS VIRTUAIS
+         ====================================================================== */
+
+      function makeLetterKey(letter) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "key";
+        button.dataset.key = letter;
+        button.textContent = letter;
+        button.setAttribute("aria-label", `Letra ${letter}`);
+        return button;
+      }
+
+      function makeActionKey(action, label) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `key key--wide ${action === "enter" ? "key--enter" : "key--back"}`;
+        button.dataset.action = action;
+        button.textContent = label;
+        button.setAttribute(
+          "aria-label",
+          action === "enter" ? "Enviar tentativa" : "Apagar última letra"
+        );
+        return button;
+      }
+
+      function buildKeyboard(container, mode) {
+        container.innerHTML = "";
+
+        KEY_ROWS.forEach((rowLetters, rowIndex) => {
+          const row = document.createElement("div");
+          row.className = "keyboard__row";
+
+          Array.from(rowLetters).forEach((letter) => {
+            row.appendChild(makeLetterKey(letter));
+          });
+
+          if (mode === "wordguess" && rowIndex === 2) {
+            row.appendChild(makeActionKey("enter", "Enter"));
+            row.appendChild(makeActionKey("backspace", "Apagar"));
+          }
+
+          container.appendChild(row);
+        });
+
+        container.addEventListener("click", (event) => {
+          const key = event.target.closest("button.key");
+          if (!key || !container.contains(key)) return;
+          if (key.getAttribute("aria-disabled") === "true") return;
+
+          if (mode === "wordguess") {
+            if (key.dataset.action === "enter") handleWordGuessKey("ENTER");
+            else if (key.dataset.action === "backspace") handleWordGuessKey("BACKSPACE");
+            else if (key.dataset.key) handleWordGuessKey(key.dataset.key);
+          } else if (key.dataset.key) {
+            handleForcaGuess(key.dataset.key);
+          }
+        });
+      }
+
+      /* ======================================================================
+         9. WORDGUESS · TABULEIRO E MECÂNICA
+         ====================================================================== */
+
+      function buildWordGuessBoard() {
+        const fragment = document.createDocumentFragment();
+
+        for (let rowIndex = 0; rowIndex < 6; rowIndex += 1) {
+          const row = document.createElement("div");
+          row.className = "board__row";
+          row.setAttribute("role", "group");
+          row.setAttribute("aria-label", `Tentativa ${rowIndex + 1}`);
+
+          for (let column = 0; column < 5; column += 1) {
+            const tile = document.createElement("div");
+            tile.className = "tile";
+            tile.setAttribute("aria-hidden", "true");
+            row.appendChild(tile);
+          }
+
+          fragment.appendChild(row);
+        }
+
+        wgBoard.appendChild(fragment);
+
+        for (let index = 0; index < 6; index += 1) {
+          const dot = document.createElement("span");
+          wgDots.appendChild(dot);
+        }
+      }
+
+      function resetWordGuessBoard() {
+        $$(".board__row", wgBoard).forEach((row, rowIndex) => {
+          row.className = "board__row";
+          row.setAttribute("aria-label", `Tentativa ${rowIndex + 1}`);
+
+          $$(".tile", row).forEach((tile) => {
+            tile.textContent = "";
+            tile.className = "tile";
+            tile.style.animationDelay = "";
+          });
+        });
+      }
+
+      function updateWgActiveRow() {
+        $$(".board__row", wgBoard).forEach((row, index) => {
+          row.classList.toggle("is-active", index === wg.row && !wg.over && !wg.locked);
+        });
+      }
+
+      function renderWgProgress() {
+        const completed = wg.guesses.length;
+        wgAttemptText.textContent = wg.over
+          ? `${completed} de 6 tentativas`
+          : `Tentativa ${Math.min(completed + 1, 6)} de 6`;
+
+        $$("span", wgDots).forEach((dot, index) => {
+          dot.className = "";
+          if (index < completed) dot.classList.add("is-done");
+          if (!wg.over && index === completed) dot.classList.add("is-current");
+          if (wg.over && wg.won && index === completed - 1) dot.classList.add("is-win");
+        });
+      }
+
+      function startWordGuess() {
+        window.clearTimeout(wgResultTimer);
+
+        const answer = pickDifferent(WORDGUESS_ANSWERS, wg.last);
+        wg.answer = answer;
+        wg.last = answer;
+        wg.guesses = [];
+        wg.outcomes = [];
+        wg.current = "";
+        wg.row = 0;
+        wg.over = false;
+        wg.won = false;
+        wg.locked = false;
+        wg.started = true;
+
+        resetWordGuessBoard();
+        resetWgKeyboard();
+        renderWgProgress();
+        updateWgActiveRow();
+
+        wgPostGame.hidden = true;
+        wgPostGame.removeAttribute("data-outcome");
+        wgNew.textContent = "Nova palavra";
+        wgStatus.textContent = "Nova rodada. Descubra a palavra de cinco letras em até seis tentativas.";
+
+        focusTitle("#wgTitle");
+      }
+
+      function resetWgKeyboard() {
+        $$(".key", wgKeyboard).forEach((key) => {
+          key.classList.remove("correct", "present", "absent");
+          key.removeAttribute("data-state");
+
+          if (key.dataset.key) {
+            key.setAttribute("aria-label", `Letra ${key.dataset.key}`);
+          } else if (key.dataset.action === "enter") {
+            key.setAttribute("aria-label", "Enviar tentativa");
+          } else {
+            key.setAttribute("aria-label", "Apagar última letra");
+          }
+        });
+      }
+
+      function syncWgCurrentRow(popIndex = -1) {
+        const row = wgBoard.children[wg.row];
+        if (!row) return;
+
+        $$(".tile", row).forEach((tile, index) => {
+          const letter = wg.current[index] || "";
+          tile.textContent = letter;
+          tile.classList.remove("correct", "present", "absent", "flip");
+          tile.style.animationDelay = "";
+
+          if (letter && !tile.classList.contains("filled")) {
+            tile.classList.add("filled");
+          } else if (!letter) {
+            tile.classList.remove("filled");
+          }
+
+          if (index === popIndex && letter) {
+            tile.classList.remove("filled");
+            void tile.offsetWidth; // reinicia a microanimação
+            tile.classList.add("filled");
+          }
+        });
+      }
+
+      function shakeWordGuessRow() {
+        const row = wgBoard.children[wg.row];
+        if (!row) return;
+        row.classList.remove("is-shaking");
+        void row.offsetWidth;
+        row.classList.add("is-shaking");
+        window.setTimeout(() => row.classList.remove("is-shaking"), 400);
+      }
+
+      function handleWordGuessKey(key) {
+        if (!wg.started || wg.over || wg.locked) return;
+
+        if (key === "ENTER") {
+          submitWordGuess();
+          return;
+        }
+
+        if (key === "BACKSPACE") {
+          if (!wg.current) return;
+          wg.current = wg.current.slice(0, -1);
+          syncWgCurrentRow();
+          return;
+        }
+
+        const letter = String(key).toUpperCase();
+        if (!/^[A-Z]$/.test(letter) || wg.current.length >= 5) return;
+
+        wg.current += letter;
+        syncWgCurrentRow(wg.current.length - 1);
+      }
+
+      function submitWordGuess() {
+        if (wg.locked || wg.over) return;
+
+        if (wg.current.length !== 5) {
+          const missing = 5 - wg.current.length;
+          showToast(`Faltam ${plural(missing, "letra", "letras")} para completar.`);
+          wgStatus.textContent = `Sua tentativa tem ${wg.current.length} de 5 letras. Faltam ${plural(missing, "letra", "letras")}.`;
+          shakeWordGuessRow();
+          return;
+        }
+
+        if (wg.guesses.includes(wg.current)) {
+          showToast("Você já tentou essa palavra.");
+          wgStatus.textContent = `A palavra ${wg.current} já foi tentada. Escolha outra.`;
+          shakeWordGuessRow();
+          return;
+        }
+
+        const guess = wg.current;
+        const outcome = evaluateGuess(guess, wg.answer);
+        const rowIndex = wg.row;
+
+        wg.guesses.push(guess);
+        wg.outcomes.push(outcome);
+        wg.current = "";
+        wg.locked = true;
+        updateWgActiveRow();
+
+        revealWordGuessRow(rowIndex, guess, outcome, () => {
+          updateWgKeyboard(guess, outcome);
+
+          const won = guess === wg.answer;
+          const ended = won || wg.guesses.length === 6;
+
+          if (ended) {
+            finishWordGuess(won);
+            return;
+          }
+
+          wg.row += 1;
+          wg.locked = false;
+          updateWgActiveRow();
+          renderWgProgress();
+
+          const summary = outcome
+            .map((state, index) => `${guess[index]} ${STATE_LABEL[state]}`)
+            .join("; ");
+
+          wgStatus.textContent = `Tentativa ${wg.guesses.length}: ${guess}. ${summary}. Agora, tentativa ${wg.guesses.length + 1} de 6.`;
+        });
+      }
+
+      /* Regra do Wordle: verdes primeiro; amarelos respeitam o saldo de cada letra. */
+      function evaluateGuess(guess, answer) {
+        const result = Array(5).fill("absent");
+        const remaining = {};
+
+        for (const letter of answer) {
+          remaining[letter] = (remaining[letter] || 0) + 1;
+        }
+
+        for (let index = 0; index < 5; index += 1) {
+          if (guess[index] === answer[index]) {
+            result[index] = "correct";
+            remaining[guess[index]] -= 1;
+          }
+        }
+
+        for (let index = 0; index < 5; index += 1) {
+          if (result[index] === "correct") continue;
+          const letter = guess[index];
+          if (remaining[letter] > 0) {
+            result[index] = "present";
+            remaining[letter] -= 1;
+          }
+        }
+
+        return result;
+      }
+
+      function revealWordGuessRow(rowIndex, guess, outcome, done) {
+        const row = wgBoard.children[rowIndex];
+        const tiles = $$(".tile", row);
+
+        if (row) {
+          row.setAttribute(
+            "aria-label",
+            `Tentativa ${rowIndex + 1}: ${guess}. ${outcome
+              .map((state, index) => `${guess[index]} ${STATE_LABEL[state]}`)
+              .join("; ")}.`
+          );
+        }
+
+        if (reducedMotion()) {
+          tiles.forEach((tile, index) => tile.classList.add(outcome[index]));
+          done();
+          return;
+        }
+
+        tiles.forEach((tile, index) => {
+          const delay = index * 85;
+          tile.style.animationDelay = `${delay}ms`;
+          tile.classList.remove("flip");
+          void tile.offsetWidth;
+          tile.classList.add("flip");
+
+          // A cor é aplicada quando o tile está de perfil, no meio do flip.
+          window.setTimeout(() => tile.classList.add(outcome[index]), 220 + delay);
+        });
+
+        window.setTimeout(() => {
+          tiles.forEach((tile) => {
+            tile.classList.remove("flip");
+            tile.style.animationDelay = "";
+          });
+          done();
+        }, 220 + (tiles.length - 1) * 85 + 290);
+      }
+
+      function updateWgKeyboard(guess, outcome) {
+        for (let index = 0; index < guess.length; index += 1) {
+          const letter = guess[index];
+          const state = outcome[index];
+          const key = wgKeyboard.querySelector(`[data-key="${letter}"]`);
+          if (!key) continue;
+
+          const previous = key.dataset.state || "";
+          if ((STATE_RANK[state] || 0) > (STATE_RANK[previous] || 0)) {
+            key.classList.remove("correct", "present", "absent");
+            key.classList.add(state);
+            key.dataset.state = state;
+            key.setAttribute("aria-label", `Letra ${letter}: ${STATE_LABEL[state]}`);
+          }
+        }
+      }
+
+      function finishWordGuess(won) {
+        wg.over = true;
+        wg.won = won;
+        wg.locked = false;
+        updateWgActiveRow();
+        renderWgProgress();
+
+        const attempts = wg.guesses.length;
+        const title = won ? "Você deduziu!" : "Quase lá!";
+
+        wgPostGame.hidden = false;
+        wgPostGame.setAttribute("data-outcome", won ? "win" : "lose");
+        $("#wgPostTitle").textContent = title;
+        $("#wgPostText").textContent = won
+          ? `A palavra era ${wg.answer}. Você chegou lá em ${plural(attempts, "tentativa", "tentativas")}.`
+          : `A palavra era ${wg.answer}. Tente outra e bora de novo.`;
+        wgNew.textContent = "Jogar de novo";
+
+        wgStatus.textContent = won
+          ? `Você venceu em ${plural(attempts, "tentativa", "tentativas")}! A palavra era ${wg.answer}.`
+          : `Fim de jogo. A palavra era ${wg.answer}.`;
+
+        wgResultTimer = window.setTimeout(() => {
+          showResult("wordguess", won);
+        }, reducedMotion() ? 80 : 520);
+      }
+
+      /* ======================================================================
+         10. FORCA · MECÂNICA
+         ====================================================================== */
+
+      function resetForcaKeyboard() {
+        $$(".key", forcaKeyboard).forEach((key) => {
+          key.classList.remove("correct", "absent", "is-used");
+          key.removeAttribute("aria-disabled");
+          key.removeAttribute("data-state");
+          if (key.dataset.key) {
+            key.setAttribute("aria-label", `Letra ${key.dataset.key}`);
+          }
+        });
+      }
+
+      function buildForcaSlots(word) {
+        forcaSlots.innerHTML = "";
+
+        Array.from(word).forEach(() => {
+          const slot = document.createElement("span");
+          slot.className = "letter-slot";
+          slot.setAttribute("aria-hidden", "true");
+          forcaSlots.appendChild(slot);
+        });
+
+        updateForcaSlotsAria();
+      }
+
+      function updateForcaSlotsAria() {
+        const positions = Array.from(forca.answer)
+          .map((letter, index) => (forca.revealed.has(index) ? letter : "vazio"))
+          .join(", ");
+
+        forcaSlots.setAttribute(
+          "aria-label",
+          `Palavra de ${plural(forca.answer.length, "letra", "letras")}: ${positions}.`
+        );
+      }
+
+      function renderForcaLives(breakingIndex = -1) {
+        forcaLives.innerHTML = Array.from({ length: 6 }, (_, index) => {
+          const lostClass = index >= forca.lives ? " is-lost" : "";
+          const breakingClass = index === breakingIndex ? " is-breaking" : "";
+          return `<span class="life${lostClass}${breakingClass}" aria-hidden="true">${HEART_SVG}</span>`;
+        }).join("");
+
+        forcaLives.setAttribute(
+          "aria-label",
+          `${forca.lives} de 6 vidas restantes`
+        );
+
+        forcaLivesText.textContent = forca.lives === 0
+          ? "Sem vidas"
+          : `${forca.lives} de 6 ${forca.lives === 1 ? "vida" : "vidas"}`;
+
+        forcaHeadLives.textContent = forca.lives === 0
+          ? "Sem vidas"
+          : plural(forca.lives, "vida", "vidas");
+      }
+
+      function startForca() {
+        window.clearTimeout(forcaResultTimer);
+
+        const entry = pickDifferent(FORCA_ENTRIES, forca.last);
+        forca.answer = entry.word;
+        forca.last = entry.word;
+        forca.clue = entry.clue;
+        forca.category = entry.category;
+        forca.guessed.clear();
+        forca.revealed.clear();
+        forca.lives = 6;
+        forca.over = false;
+        forca.won = false;
+        forca.locked = false;
+        forca.started = true;
+
+        forcaCategory.textContent = entry.category;
+        forcaLength.textContent = plural(entry.word.length, "letra", "letras");
+        forcaClue.textContent = entry.clue;
+
+        buildForcaSlots(entry.word);
+        renderForcaLives();
+        resetForcaKeyboard();
+
+        forcaCard.classList.remove("is-shaking");
+        forcaPostGame.hidden = true;
+        forcaPostGame.removeAttribute("data-outcome");
+        forcaNew.textContent = "Nova palavra";
+        forcaStatus.textContent = `Nova rodada. A palavra tem ${plural(entry.word.length, "letra", "letras")}. Dica: ${entry.clue}`;
+
+        focusTitle("#forcaTitle");
+      }
+
+      function markForcaKey(key, hit, letter) {
+        if (!key) return;
+        key.classList.add("is-used");
+        key.classList.add(hit ? "correct" : "absent");
+        key.dataset.state = hit ? "correct" : "absent";
+        key.setAttribute("aria-disabled", "true");
+        key.setAttribute(
+          "aria-label",
+          `Letra ${letter}: ${hit ? "presente na palavra" : "fora da palavra"}`
+        );
+      }
+
+      function shakeForcaCard() {
+        if (reducedMotion()) return;
+        forcaCard.classList.remove("is-shaking");
+        void forcaCard.offsetWidth;
+        forcaCard.classList.add("is-shaking");
+        window.setTimeout(() => forcaCard.classList.remove("is-shaking"), 420);
+      }
+
+      function revealForcaMissedLetters() {
+        Array.from(forca.answer).forEach((letter, index) => {
+          if (forca.revealed.has(index)) return;
+          const slot = forcaSlots.children[index];
+          if (!slot) return;
+          slot.textContent = letter;
+          slot.classList.add("is-missed");
+        });
+
+        updateForcaSlotsAria();
+        forcaSlots.setAttribute(
+          "aria-label",
+          `Palavra revelada: ${Array.from(forca.answer).join(", ")}. Fim das vidas.`
+        );
+      }
+
+      function handleForcaGuess(letter) {
+        if (!forca.started || forca.over || forca.locked || forca.guessed.has(letter)) return;
+
+        forca.guessed.add(letter);
+        const key = forcaKeyboard.querySelector(`[data-key="${letter}"]`);
+        const positions = [];
+
+        Array.from(forca.answer).forEach((answerLetter, index) => {
+          if (answerLetter === letter) positions.push(index);
+        });
+
+        if (positions.length > 0) {
+          positions.forEach((index) => {
+            forca.revealed.add(index);
+            const slot = forcaSlots.children[index];
+            if (slot) {
+              slot.textContent = letter;
+              slot.classList.add("is-revealed");
+            }
+          });
+
+          updateForcaSlotsAria();
+          markForcaKey(key, true, letter);
+
+          const won = forca.revealed.size === forca.answer.length;
+
+          if (won) {
+            forca.over = true;
+            forca.locked = true;
+            window.setTimeout(() => finishForca(true), reducedMotion() ? 0 : 480);
+          } else {
+            forcaStatus.textContent = `Letra ${letter}: na palavra. ${forca.revealed.size} de ${plural(forca.answer.length, "letra revelada", "letras reveladas")}.`;
+          }
+
+          return;
+        }
+
+        forca.lives -= 1;
+        const lostIndex = forca.lives;
+        renderForcaLives(lostIndex);
+        markForcaKey(key, false, letter);
+        shakeForcaCard();
+
+        if (forca.lives === 0) {
+          forca.over = true;
+          forca.locked = true;
+          window.setTimeout(() => {
+            revealForcaMissedLetters();
+            window.setTimeout(() => finishForca(false), reducedMotion() ? 0 : 280);
+          }, reducedMotion() ? 0 : 430);
+          return;
+        }
+
+        forcaStatus.textContent = `Letra ${letter}: fora da palavra. ${plural(forca.lives, "vida restante", "vidas restantes")}.`;
+      }
+
+      function finishForca(won) {
+        forca.over = true;
+        forca.won = won;
+        forca.locked = false;
+
+        const title = won ? "Palavra completa!" : "Fim das vidas!";
+
+        forcaPostGame.hidden = false;
+        forcaPostGame.setAttribute("data-outcome", won ? "win" : "lose");
+        $("#forcaPostTitle").textContent = title;
+        $("#forcaPostText").textContent = won
+          ? `A palavra era ${forca.answer}. Você terminou com ${plural(forca.lives, "vida", "vidas")} restante${forca.lives === 1 ? "" : "s"}.`
+          : `A palavra era ${forca.answer}. Tente outra e bora de novo.`;
+        forcaNew.textContent = "Jogar de novo";
+
+        forcaStatus.textContent = won
+          ? `Palavra completa! A palavra era ${forca.answer}. Você terminou com ${plural(forca.lives, "vida", "vidas")} restante${forca.lives === 1 ? "" : "s"}.`
+          : `Fim das vidas. A palavra era ${forca.answer}.`;
+
+        forcaResultTimer = window.setTimeout(() => {
+          showResult("forca", won);
+        }, reducedMotion() ? 80 : 480);
+      }
+
+      /* ======================================================================
+         11. RESULTADO E COMPARTILHAMENTO
+         ====================================================================== */
+
+      function buildConfetti() {
+        const colors = ["var(--coral)", "var(--yellow)", "var(--green)", "var(--lilac)"];
+
+        for (let index = 0; index < 20; index += 1) {
+          const piece = document.createElement("span");
+          piece.className = "confetti";
+          piece.style.setProperty("--x", `${Math.round(Math.random() * 96)}%`);
+          piece.style.setProperty("--c", colors[index % colors.length]);
+          piece.style.setProperty("--d", `${(index % 10) * 0.055}s`);
+          piece.style.setProperty("--r", `${Math.round(Math.random() * 360)}deg`);
+          resultConfetti.appendChild(piece);
+        }
+      }
+
+      function getWordGuessShare() {
+        const rows = wg.outcomes.map((outcome) =>
+          outcome
+            .map((state) => (state === "correct" ? "🟩" : state === "present" ? "🟨" : "⬜"))
+            .join("")
+        );
+
+        return {
+          rows,
+          text: [
+            "Deduzi · WordGuess",
+            ...rows,
+            `${wg.guesses.length}/6 tentativas`,
+            "",
+            "Menos sorte. Mais dedução."
+          ].join("\n")
+        };
+      }
+
+      function getForcaShare() {
+        const livesRow = "❤️".repeat(forca.lives) + "🤍".repeat(6 - forca.lives);
+        const lettersRow = Array.from(forca.answer)
+          .map((_, index) => (forca.revealed.has(index) ? "🟩" : "⬜"))
+          .join("");
+
+        return {
+          rows: [livesRow, lettersRow],
+          text: [
+            "Deduzi · Forca",
+            livesRow,
+            lettersRow,
+            `${forca.answer.length} letras · ${forca.lives}/6 vidas`,
+            "",
+            "Menos sorte. Mais dedução."
+          ].join("\n")
+        };
+      }
+
+      function showResult(mode, won) {
+        if (helpDialog.open || currentView !== mode) return;
+
+        const isWordGuess = mode === "wordguess";
+        const word = isWordGuess ? wg.answer : forca.answer;
+        const payload = isWordGuess ? getWordGuessShare() : getForcaShare();
+
+        resultDialog.dataset.mode = mode;
+        resultDialog.dataset.outcome = won ? "win" : "lose";
+
+        $("#resultKicker").textContent = isWordGuess ? "WordGuess · resultado" : "Forca · resultado";
+        $("#resultTitle").textContent = isWordGuess
+          ? (won ? "Você deduziu!" : "Quase lá!")
+          : (won ? "Palavra completa!" : "Fim das vidas!");
+        $("#resultSub").textContent = "A palavra era";
+        $("#resultWord").textContent = word;
+        $("#resultStats").textContent = isWordGuess
+          ? (won
+            ? `${plural(wg.guesses.length, "tentativa", "tentativas")} de 6 · mandou bem`
+            : "6 tentativas · não foi dessa vez")
+          : `${plural(forca.answer.length, "letra", "letras")} · ${forca.lives} de 6 vidas restantes`;
+
+        const grid = $("#resultGrid");
+        grid.innerHTML = "";
+        payload.rows.forEach((row) => {
+          const rowElement = document.createElement("div");
+          rowElement.className = "share-card__row";
+          rowElement.textContent = row;
+          grid.appendChild(rowElement);
+        });
+        grid.setAttribute("role", "img");
+        grid.setAttribute(
+          "aria-label",
+          `Grade de resultado em emojis: ${payload.rows.length} ${payload.rows.length === 1 ? "linha" : "linhas"}.`
+        );
+
+        const shareButton = $("#resultShare");
+        shareButton.classList.remove("is-copied");
+        shareButton.textContent = "Compartilhar resultado";
+
+        resultPanel.classList.remove("is-celebrating");
+        void resultPanel.offsetWidth;
+        if (won) resultPanel.classList.add("is-celebrating");
+
+        openResultDialog();
+      }
+
+      async function shareResult(mode, button) {
+        const alreadyFinished = mode === "wordguess" ? wg.over : forca.over;
+        if (!alreadyFinished) {
+          showToast("Termine a rodada para compartilhar.");
+          return;
+        }
+
+        const payload = mode === "wordguess" ? getWordGuessShare() : getForcaShare();
+        const copied = await copyText(payload.text);
+
+        if (!copied) {
+          showToast("Não consegui copiar. Selecione o resultado no cartão.");
+          return;
+        }
+
+        showToast("Resultado copiado! Agora é só colar onde quiser.");
+
+        if (button) {
+          button.classList.add("is-copied");
+          button.textContent = "Copiado!";
+          window.setTimeout(() => {
+            button.classList.remove("is-copied");
+            button.textContent = "Compartilhar resultado";
+          }, 2300);
+        }
+      }
+
+      /* ======================================================================
+         12. EVENTOS GERAIS
+         ====================================================================== */
+
+      backHomeButton.addEventListener("click", () => showView("home"));
+
+      $$("[data-go-home]").forEach((link) => {
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          showView("home");
+        });
+      });
+
+      /* Cards de modo, links do rodapé e trocas de modo no jogo. */
+      document.addEventListener("click", (event) => {
+        const starter = event.target.closest("[data-start-mode]");
+        if (!starter) return;
+        event.preventDefault();
+        openMode(starter.dataset.startMode);
+      });
+
+      $$(".js-theme-toggle").forEach((button) => {
+        button.addEventListener("click", toggleTheme);
+      });
+
+      themeMedia.addEventListener("change", (event) => {
+        try {
+          if (!localStorage.getItem("deduzi-theme")) {
+            applyTheme(event.matches ? "dark" : "light");
+          }
+        } catch (error) { /* sem localStorage */ }
+      });
+
+      wgNew.addEventListener("click", startWordGuess);
+      $("#wgAgain").addEventListener("click", startWordGuess);
+      $("#wgShare").addEventListener("click", () => shareResult("wordguess", $("#wgShare")));
+
+      forcaNew.addEventListener("click", startForca);
+      $("#forcaAgain").addEventListener("click", startForca);
+      $("#forcaShare").addEventListener("click", () => shareResult("forca", $("#forcaShare")));
+
+      $("#resultShare").addEventListener("click", () => {
+        const mode = resultDialog.dataset.mode || "wordguess";
+        shareResult(mode, $("#resultShare"));
+      });
+
+      $("#resultAgain").addEventListener("click", () => {
+        const mode = resultDialog.dataset.mode || "wordguess";
+        resultDialog.close();
+        if (mode === "forca") startForca();
+        else startWordGuess();
+      });
+
+      /* Teclado físico: funciona nos dois modos, mas respeita botões reais. */
+      document.addEventListener("keydown", (event) => {
+        if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+        if (document.querySelector("dialog[open]")) return;
+        if (currentView !== "wordguess" && currentView !== "forca") return;
+
+        const targetIsControl = event.target instanceof Element
+          && Boolean(event.target.closest("button, a, input, textarea, select, [contenteditable='true']"));
+        const targetIsKeyboardKey = event.target instanceof Element
+          && Boolean(event.target.closest(".keyboard"));
+
+        if (currentView === "wordguess") {
+          if (/^[a-zA-Z]$/.test(event.key)) {
+            event.preventDefault();
+            handleWordGuessKey(event.key.toUpperCase());
+            return;
+          }
+
+          if (event.key === "Enter") {
+            if (targetIsControl && !targetIsKeyboardKey) return;
+            event.preventDefault();
+            handleWordGuessKey("ENTER");
+            return;
+          }
+
+          if (event.key === "Backspace") {
+            event.preventDefault();
+            handleWordGuessKey("BACKSPACE");
+          }
+          return;
+        }
+
+        if (/^[a-zA-Z]$/.test(event.key)) {
+          event.preventDefault();
+          handleForcaGuess(event.key.toUpperCase());
+        }
+      });
+
+      /* Se a fonte de movimento mudar com a página aberta, nada explode. */
+      motionQuery.addEventListener?.("change", () => {
+        // As regras de CSS já respondem sozinhas; nenhum estado precisa mudar.
+      });
+
+      /* ======================================================================
+         13. INICIALIZAÇÃO
+         ====================================================================== */
+
+      function init() {
+        buildWordGuessBoard();
+        buildKeyboard(wgKeyboard, "wordguess");
+        buildKeyboard(forcaKeyboard, "forca");
+        buildConfetti();
+        applyTheme(currentTheme());
+
+        const requested = window.location.hash.replace("#", "");
+        if (requested === "wordguess" || requested === "forca") {
+          openMode(requested, { fresh: true });
+        } else {
+          showView("home");
+        }
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>

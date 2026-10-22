@@ -1,0 +1,3632 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light" data-colorblind="false">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Deduzi — protótipo acessível de jogo casual de palavras em português. WordGuess e Forca, com contraste, teclado e leitura por símbolos.">
+  <meta name="theme-color" content="#F4F0E6" id="meta-theme">
+  <title>Deduzi — Jogo de palavras</title>
+
+  <!--
+    Aplica as preferências antes da primeira pintura para evitar "flash" de tema.
+    A mesma chave é usada pelo script principal no fim da página.
+  -->
+  <script>
+    (function () {
+      var key = 'deduzi.prefs.v1';
+      var root = document.documentElement;
+      var saved = null;
+      try { saved = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) {}
+      var prefersContrast = window.matchMedia && window.matchMedia('(prefers-contrast: more)').matches;
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var prefersReduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var theme = saved && ['light', 'dark', 'contrast'].indexOf(saved.theme) >= 0
+        ? saved.theme
+        : (prefersContrast ? 'contrast' : (prefersDark ? 'dark' : 'light'));
+      var scale = saved && typeof saved.fontScale === 'number' ? saved.fontScale : 1;
+      var reduce = (saved && saved.reducedMotion) || prefersReduce;
+      root.dataset.theme = theme;
+      root.dataset.colorblind = String(!!(saved && saved.colorblind));
+      root.style.setProperty('--font-scale', scale);
+      if (reduce) root.classList.add('reduce-motion');
+    }());
+  </script>
+
+  <style>
+    /* =========================================================
+       1. Tokens, temas e base
+       ========================================================= */
+    :root {
+      color-scheme: light;
+
+      --font-body: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-display: "Iowan Old Style", "Palatino Linotype", "URW Palladio L", P052, Georgia, "Times New Roman", serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+      --bg: #F4F0E6;
+      --bg-elevated: #FBF7ED;
+      --surface: #FFFDF8;
+      --surface-2: #F0EADA;
+      --ink: #161A17;
+      --ink-soft: #4C514A;
+      --ink-faint: #5B6159;
+      --line: #D6CFBF;
+      --line-strong: #797366;
+      --brand: #0C5B4A;
+      --brand-hover: #084438;
+      --brand-soft: #DBEAE3;
+      --brand-ink: #FFFFFF;
+      --accent: #9C3D1E;
+      --accent-soft: #F4DFD5;
+      --danger: #9B1C24;
+      --danger-soft: #F8E3E1;
+      --selected-bg: var(--ink);
+      --selected-ink: var(--surface);
+      --focus-ring: #161A17;
+      --focus-halo: #FFC400;
+      --shadow: 0 24px 60px -40px rgba(22, 26, 23, .45), 0 2px 0 rgba(22, 26, 23, .04);
+      --shadow-soft: 0 12px 30px -28px rgba(22, 26, 23, .5);
+      --key-bg: #FFFDF8;
+      --key-border: #797366;
+      --key-shadow: 0 2px 0 #C9C1B0;
+      --tile-empty: #FBF8F0;
+      --tile-empty-border: #8A8375;
+      --grid-line: rgba(22, 26, 23, .045);
+      --glow: rgba(12, 91, 74, .09);
+      --tile-pattern: rgba(255, 255, 255, .14);
+
+      /* Estados do jogo — verdes/âmbar por padrão */
+      --correct-bg: #0B5B43;
+      --correct-ink: #FFFFFF;
+      --present-bg: #7C4400;
+      --present-ink: #FFFFFF;
+      --absent-bg: #4D554F;
+      --absent-ink: #FFFFFF;
+
+      --radius-lg: 24px;
+      --radius-md: 16px;
+      --radius-sm: 10px;
+      --tap: 44px;
+      --container: 1120px;
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0E1412;
+      --bg-elevated: #141C18;
+      --surface: #18201C;
+      --surface-2: #212B26;
+      --ink: #F5F2E8;
+      --ink-soft: #B9BFB4;
+      --ink-faint: #9BA39A;
+      --line: #33413A;
+      --line-strong: #85978E;
+      --brand: #7CE1BE;
+      --brand-hover: #9DEBD1;
+      --brand-soft: #16372C;
+      --brand-ink: #07130F;
+      --accent: #FFAD7A;
+      --accent-soft: #3A241A;
+      --danger: #FFB4AB;
+      --danger-soft: #3C1E1E;
+      --selected-bg: var(--ink);
+      --selected-ink: var(--bg-elevated);
+      --focus-ring: #FFD24A;
+      --focus-halo: #0E1412;
+      --shadow: 0 24px 60px -34px #000, 0 1px 0 rgba(255, 255, 255, .03);
+      --shadow-soft: 0 12px 30px -24px #000;
+      --key-bg: #202A25;
+      --key-border: #7D8E85;
+      --key-shadow: 0 2px 0 #0A0F0D;
+      --tile-empty: #141C18;
+      --tile-empty-border: #78877F;
+      --grid-line: rgba(255, 255, 255, .035);
+      --glow: rgba(124, 225, 190, .06);
+
+      --correct-bg: #6FE3B7;
+      --correct-ink: #042018;
+      --present-bg: #FFC266;
+      --present-ink: #241400;
+      --absent-bg: #37413C;
+      --absent-ink: #F1F4EE;
+      --tile-pattern: rgba(0, 0, 0, .13);
+    }
+
+    /* Alto contraste: preto, branco e amarelo. Bordas sempre presentes. */
+    html[data-theme="contrast"] {
+      color-scheme: dark;
+      --bg: #000000;
+      --bg-elevated: #000000;
+      --surface: #000000;
+      --surface-2: #0A0A0A;
+      --ink: #FFFFFF;
+      --ink-soft: #FFFFFF;
+      --ink-faint: #F0F0F0;
+      --line: #FFFFFF;
+      --line-strong: #FFFFFF;
+      --brand: #FFE24D;
+      --brand-hover: #FFF27A;
+      --brand-soft: #1A1A00;
+      --brand-ink: #000000;
+      --accent: #67E8F9;
+      --accent-soft: #00252A;
+      --danger: #FFB4AB;
+      --danger-soft: #2A0000;
+      --selected-bg: var(--brand);
+      --selected-ink: #000000;
+      --focus-ring: #00F0FF;
+      --focus-halo: #FFFFFF;
+      --shadow: none;
+      --shadow-soft: none;
+      --key-bg: #000000;
+      --key-border: #FFFFFF;
+      --key-shadow: none;
+      --tile-empty: #000000;
+      --tile-empty-border: #FFFFFF;
+      --grid-line: transparent;
+      --glow: transparent;
+      --tile-pattern: rgba(0, 0, 0, .16);
+
+      --correct-bg: #FFE24D;
+      --correct-ink: #000000;
+      --present-bg: #67E8F9;
+      --present-ink: #001014;
+      --absent-bg: #000000;
+      --absent-ink: #FFFFFF;
+    }
+
+    /* Daltonismo: azul/laranja. Os símbolos existem em todos os modos. */
+    html[data-colorblind="true"]:not([data-theme="contrast"]) {
+      --correct-bg: #0B4E9B;
+      --correct-ink: #FFFFFF;
+      --present-bg: #953600;
+      --present-ink: #FFFFFF;
+    }
+
+    html[data-theme="dark"][data-colorblind="true"]:not([data-theme="contrast"]) {
+      --correct-bg: #8AC8FF;
+      --correct-ink: #031A2E;
+      --present-bg: #FFAD73;
+      --present-ink: #2B1000;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+
+    html {
+      font-size: calc(100% * var(--font-scale, 1));
+      scroll-behavior: smooth;
+      scroll-padding-top: 6rem;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      margin: 0;
+      min-width: 0;
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(circle at 8% 0%, var(--glow), transparent 34rem),
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: auto, 52px 52px, 52px 52px;
+      color: var(--ink);
+      font-family: var(--font-body);
+      font-size: 1rem;
+      line-height: 1.6;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    img, svg { max-width: 100%; }
+    button, input, textarea, select { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    a { color: var(--brand); text-underline-offset: .18em; }
+
+    h1, h2, h3, h4, p { margin: 0; }
+    h1, h2, h3 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      line-height: 1.08;
+      letter-spacing: -.02em;
+      text-wrap: balance;
+    }
+
+    ul, ol { margin: 0; padding: 0; }
+    fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+    legend { padding: 0; }
+
+    /* Foco de dois tons: visível em qualquer fundo e em qualquer tema.
+       O halo usa !important para vencer sombras decorativas de teclas/cartões. */
+    :is(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+      outline: 3px solid var(--focus-ring);
+      outline-offset: 2px;
+      box-shadow: 0 0 0 7px var(--focus-halo) !important;
+    }
+
+    .view-heading:focus,
+    .result-heading:focus,
+    main:focus,
+    .modal:focus {
+      outline: none;
+    }
+
+    .sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0 0 0 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: .75rem;
+      left: .75rem;
+      z-index: 200;
+      transform: translateY(-180%);
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--tap);
+      padding: .65rem 1rem;
+      border: 2px solid var(--ink);
+      border-radius: 10px;
+      background: var(--brand);
+      color: var(--brand-ink);
+      font-weight: 700;
+      text-decoration: none;
+      box-shadow: var(--shadow);
+      transition: transform .16s ease;
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    .container {
+      width: min(var(--container), calc(100% - 2rem));
+      margin-inline: auto;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: .55rem;
+      font-family: var(--font-mono);
+      font-size: .7rem;
+      font-weight: 700;
+      line-height: 1.3;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--brand);
+    }
+    .eyebrow::before {
+      content: "";
+      width: .45rem;
+      height: .45rem;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .mono { font-family: var(--font-mono); }
+
+    /* =========================================================
+       2. Botões e controles
+       ========================================================= */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .55rem;
+      min-height: var(--tap);
+      padding: .65rem 1.1rem;
+      border: 1.5px solid transparent;
+      border-radius: 12px;
+      background: transparent;
+      color: var(--ink);
+      font-size: .92rem;
+      font-weight: 700;
+      line-height: 1.2;
+      text-align: center;
+      text-decoration: none;
+      touch-action: manipulation;
+      transition: background-color .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+    }
+    .btn:active { transform: translateY(1px); }
+
+    .btn-primary {
+      background: var(--brand);
+      border-color: var(--brand);
+      color: var(--brand-ink);
+    }
+    .btn-secondary {
+      background: var(--surface);
+      border-color: var(--line-strong);
+      color: var(--ink);
+    }
+    .btn-ghost {
+      background: transparent;
+      border-color: var(--line-strong);
+      color: var(--ink);
+    }
+    .btn-quiet {
+      background: transparent;
+      border-color: transparent;
+      color: var(--brand);
+      text-decoration: underline;
+      text-decoration-thickness: 1.5px;
+      text-underline-offset: .2em;
+    }
+    .btn-sm {
+      min-height: var(--tap);
+      padding: .5rem .8rem;
+      font-size: .82rem;
+      border-radius: 10px;
+    }
+
+    @media (hover: hover) {
+      .btn-primary:hover { background: var(--brand-hover); border-color: var(--brand-hover); }
+      .btn-secondary:hover, .btn-ghost:hover { background: var(--surface-2); border-color: var(--ink-soft); }
+      .btn-quiet:hover { background: var(--surface-2); }
+    }
+
+    .icon-btn {
+      display: inline-grid;
+      place-items: center;
+      width: var(--tap);
+      height: var(--tap);
+      min-width: var(--tap);
+      padding: 0;
+      border: 1.5px solid var(--line-strong);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: .9rem;
+      font-weight: 800;
+    }
+    @media (hover: hover) { .icon-btn:hover { background: var(--surface-2); } }
+
+    .link-button {
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--tap);
+      padding: .2rem 0;
+      border: 0;
+      background: none;
+      color: var(--ink-soft);
+      font-size: .84rem;
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: .2em;
+    }
+    @media (hover: hover) { .link-button:hover { color: var(--brand); } }
+
+    kbd {
+      display: inline-block;
+      padding: .08rem .38rem;
+      border: 1px solid currentColor;
+      border-radius: 5px;
+      font-family: var(--font-mono);
+      font-size: .74em;
+      font-weight: 700;
+      line-height: 1.5;
+      white-space: nowrap;
+    }
+
+    /* =========================================================
+       3. Cabeçalho
+       ========================================================= */
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid var(--line);
+      background: var(--bg-elevated);
+      background: color-mix(in srgb, var(--bg) 92%, transparent);
+      backdrop-filter: blur(12px);
+    }
+    .header-inner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: .5rem 1rem;
+      min-height: 68px;
+      padding-block: .5rem;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: .65rem;
+      min-height: var(--tap);
+      border-radius: 8px;
+      color: var(--ink);
+      text-decoration: none;
+    }
+    .brand-mark {
+      display: grid;
+      grid-template-columns: repeat(2, 9px);
+      grid-template-rows: repeat(2, 9px);
+      gap: 2px;
+      padding: 5px;
+      border: 1.5px solid var(--ink);
+      border-radius: 7px;
+      background: var(--surface);
+    }
+    .brand-mark span {
+      display: block;
+      border-radius: 1.5px;
+      background: var(--line-strong);
+    }
+    .brand-mark span:nth-child(2) { background: var(--correct-bg); }
+    .brand-mark span:nth-child(3) { background: var(--present-bg); }
+    .brand-name {
+      font-family: var(--font-display);
+      font-size: 1.55rem;
+      font-weight: 600;
+      letter-spacing: -.035em;
+      line-height: 1;
+    }
+    .header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .5rem;
+    }
+    .header-a11y {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      min-height: var(--tap);
+      min-width: var(--tap);
+      padding: 0 .75rem;
+      border: 1.5px solid var(--line-strong);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--ink);
+      font-size: .8rem;
+      font-weight: 700;
+    }
+    .header-a11y .aa {
+      font-family: var(--font-mono);
+      font-size: .85rem;
+      font-weight: 800;
+    }
+    .header-a11y-text { display: none; }
+    @media (hover: hover) { .header-a11y:hover { background: var(--surface-2); } }
+
+    /* =========================================================
+       4. Home — hero
+       ========================================================= */
+    .home { padding-bottom: 2rem; }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+      gap: clamp(2rem, 6vw, 5rem);
+      align-items: center;
+      padding-block: clamp(3rem, 7vw, 6.5rem) clamp(2.5rem, 5vw, 4rem);
+    }
+    .hero-copy { min-width: 0; }
+    .hero .eyebrow { margin-bottom: 1.1rem; }
+    .hero-title {
+      display: flex;
+      align-items: center;
+      gap: .12em;
+      margin-left: -.06em;
+      font-size: clamp(4.2rem, 11vw, 8.4rem);
+      font-weight: 600;
+      line-height: .86;
+      letter-spacing: -.055em;
+    }
+    .title-tile {
+      display: inline-grid;
+      place-items: center;
+      width: .52em;
+      height: .56em;
+      margin-top: .08em;
+      border-radius: .06em;
+      background: var(--brand);
+      color: var(--brand-ink);
+      font-family: var(--font-mono);
+      font-size: .3em;
+      font-weight: 800;
+      letter-spacing: 0;
+      line-height: 1;
+      transform: rotate(3deg);
+      box-shadow: 0 .045em 0 var(--ink);
+    }
+    .title-tile::before {
+      content: "";
+      width: .3em;
+      height: .16em;
+      margin-top: -.08em;
+      border-left: .07em solid currentColor;
+      border-bottom: .07em solid currentColor;
+      transform: rotate(-45deg);
+    }
+    .hero-lede {
+      max-width: 29ch;
+      margin-top: 1.35rem;
+      font-family: var(--font-display);
+      font-size: clamp(1.45rem, 2.7vw, 2rem);
+      line-height: 1.24;
+      letter-spacing: -.015em;
+      text-wrap: balance;
+    }
+    .hero-sub {
+      max-width: 48ch;
+      margin-top: 1rem;
+      color: var(--ink-soft);
+      font-size: 1rem;
+    }
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .65rem;
+      margin-top: 1.7rem;
+    }
+    .trust-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .45rem 1.2rem;
+      margin-top: 1.6rem;
+      list-style: none;
+      color: var(--ink-soft);
+      font-size: .8rem;
+      font-weight: 600;
+    }
+    .trust-row li { display: inline-flex; align-items: center; gap: .4rem; }
+    .trust-row li::before {
+      content: "✓";
+      display: inline-grid;
+      place-items: center;
+      width: 1.15rem;
+      height: 1.15rem;
+      border: 1px solid var(--brand);
+      border-radius: 50%;
+      color: var(--brand);
+      font-size: .62rem;
+      font-weight: 900;
+    }
+
+    /* Cartão demonstrativo do feedback */
+    .hero-board {
+      position: relative;
+      justify-self: end;
+      width: min(100%, 420px);
+      padding: clamp(1.2rem, 3vw, 1.7rem);
+      border: 1.5px solid var(--ink);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: 10px 12px 0 var(--brand-soft), var(--shadow);
+      transform: rotate(1.2deg);
+    }
+    .hero-board::before {
+      content: "";
+      position: absolute;
+      inset: 10px;
+      border: 1px dashed var(--line);
+      border-radius: calc(var(--radius-lg) - 8px);
+      pointer-events: none;
+    }
+    .hero-board-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .75rem;
+      padding-bottom: .85rem;
+      border-bottom: 1px solid var(--line);
+      font-size: .82rem;
+      font-weight: 700;
+    }
+    .hero-board-head .mono {
+      color: var(--brand);
+      font-size: .62rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .demo-tiles {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: clamp(4px, 1.5vw, 8px);
+      margin-block: 1.3rem 1rem;
+    }
+    .demo-tile {
+      position: relative;
+      display: grid;
+      place-items: center;
+      aspect-ratio: 1;
+      border: 2px solid var(--tile-empty-border);
+      border-radius: 8px;
+      background: var(--tile-empty);
+      font-size: clamp(1.1rem, 3.5vw, 1.5rem);
+      font-weight: 800;
+      line-height: 1;
+    }
+    .demo-mark {
+      position: absolute;
+      top: 2px;
+      right: 5px;
+      font-size: .62rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .demo-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .4rem .9rem;
+      padding-top: .9rem;
+      border-top: 1px solid var(--line);
+      color: var(--ink-soft);
+      font-size: .7rem;
+      font-weight: 600;
+    }
+    .demo-legend span { display: inline-flex; align-items: center; gap: .28rem; }
+    .demo-legend b { font-size: .8rem; color: var(--ink); }
+    .hero-board-caption {
+      margin-top: .85rem;
+      color: var(--ink-soft);
+      font-size: .78rem;
+      font-style: italic;
+    }
+    .hero-board-stamp {
+      position: absolute;
+      top: -16px;
+      right: 18px;
+      padding: .3rem .6rem;
+      border: 1.5px solid var(--ink);
+      border-radius: 999px;
+      background: var(--bg-elevated);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: .58rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      transform: rotate(-3deg);
+    }
+
+    /* Tiles com estado — usados no letreiro, nos cards e no jogo */
+    .state-correct { background: var(--correct-bg) !important; border-color: var(--correct-bg) !important; color: var(--correct-ink) !important; }
+    .state-present { background: var(--present-bg) !important; border-color: var(--present-bg) !important; color: var(--present-ink) !important; }
+    .state-absent { background: var(--absent-bg) !important; border-color: var(--absent-bg) !important; color: var(--absent-ink) !important; }
+
+    /* =========================================================
+       5. Modos de jogo
+       ========================================================= */
+    .modes { padding-block: clamp(2rem, 5vw, 3.5rem); }
+    .section-heading {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem 2rem;
+      margin-bottom: 1.6rem;
+    }
+    .section-heading h2 {
+      margin-top: .55rem;
+      font-size: clamp(2rem, 4vw, 2.85rem);
+    }
+    .section-heading p {
+      max-width: 40ch;
+      color: var(--ink-soft);
+      font-size: .95rem;
+    }
+    .mode-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1.15rem;
+    }
+    .mode-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 350px;
+      padding: clamp(1.3rem, 3vw, 1.9rem);
+      overflow: hidden;
+      border: 1.5px solid var(--line-strong);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      color: var(--ink);
+      text-decoration: none;
+      box-shadow: var(--shadow-soft);
+      transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+    }
+    .mode-card::before {
+      content: "";
+      position: absolute;
+      top: -70px;
+      right: -60px;
+      width: 190px;
+      height: 190px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .mode-card::after {
+      content: "";
+      position: absolute;
+      right: 24px;
+      bottom: -96px;
+      width: 150px;
+      height: 150px;
+      border: 1px dashed var(--line);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    @media (hover: hover) {
+      .mode-card:hover {
+        transform: translateY(-3px);
+        border-color: var(--brand);
+        box-shadow: 0 24px 42px -28px rgba(22, 26, 23, .42);
+      }
+      .mode-card:hover .mode-arrow { transform: translateX(3px); background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+    }
+    .mode-card:active { transform: translateY(0); }
+    .mode-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: .6rem;
+    }
+    .mode-num {
+      display: inline-grid;
+      place-items: center;
+      min-width: 2.3rem;
+      height: 2rem;
+      padding-inline: .45rem;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      font-family: var(--font-mono);
+      font-size: .68rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: .2rem .6rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--bg-elevated);
+      color: var(--ink-soft);
+      font-family: var(--font-mono);
+      font-size: .63rem;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .mode-art {
+      display: flex;
+      align-items: center;
+      min-height: 66px;
+      margin-block: 1.4rem 1.2rem;
+    }
+    .mini-board {
+      display: grid;
+      grid-template-columns: repeat(5, 42px);
+      gap: 4px;
+    }
+    .mini-tile {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 42px;
+      aspect-ratio: 1;
+      border: 2px solid var(--tile-empty-border);
+      border-radius: 7px;
+      background: var(--tile-empty);
+      font-size: 1rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .mini-tile .demo-mark { top: 1px; right: 2px; min-width: 0; min-height: 0; padding: 0; background: transparent; font-size: .66rem; }
+    .mini-word {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      padding-bottom: .4rem;
+    }
+    .mini-slot {
+      display: grid;
+      place-items: end center;
+      width: 34px;
+      height: 44px;
+      padding-bottom: .25rem;
+      border-bottom: 3px solid var(--line-strong);
+      font-size: 1rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .mini-slot.is-on { border-color: var(--brand); }
+    .mini-lives {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: .65rem;
+    }
+    .mini-lives span {
+      display: grid;
+      place-items: center;
+      width: 19px;
+      height: 19px;
+      border: 1px solid var(--brand);
+      border-radius: 50%;
+      background: var(--brand-soft);
+      color: var(--brand);
+      font-size: .58rem;
+      line-height: 1;
+    }
+    .mini-lives span.lost { border-style: dashed; background: transparent; color: var(--ink-soft); }
+    .mode-card h3 {
+      font-size: clamp(2rem, 3.2vw, 2.45rem);
+    }
+    .mode-card > p {
+      max-width: 40ch;
+      margin-top: .5rem;
+      color: var(--ink-soft);
+      font-size: .93rem;
+    }
+    .mode-cta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-top: auto;
+      padding-top: 1.15rem;
+      border-top: 1px solid var(--line);
+      color: var(--ink);
+      font-size: .88rem;
+      font-weight: 800;
+    }
+    .mode-arrow {
+      display: inline-grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      flex: 0 0 auto;
+      border: 1.5px solid var(--line-strong);
+      border-radius: 50%;
+      font-size: 1rem;
+      transition: transform .18s ease, background-color .18s ease, color .18s ease;
+    }
+
+    /* =========================================================
+       6. Painel de acessibilidade
+       ========================================================= */
+    .a11y-section {
+      padding-block: clamp(3rem, 7vw, 5.5rem);
+      border-top: 1.5px solid var(--line-strong);
+      scroll-margin-top: 6rem;
+    }
+    .a11y-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+      gap: 1rem 3rem;
+      align-items: end;
+      margin-bottom: 1.6rem;
+    }
+    .a11y-head h2 {
+      margin-top: .55rem;
+      font-size: clamp(2.1rem, 4vw, 3rem);
+    }
+    .a11y-head p {
+      max-width: 42ch;
+      color: var(--ink-soft);
+      font-size: .95rem;
+    }
+    .a11y-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr);
+      gap: 1.15rem;
+      align-items: start;
+    }
+    .settings-card {
+      padding: clamp(1.2rem, 3vw, 1.8rem);
+      border: 1.5px solid var(--line-strong);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+    }
+    .setting-block {
+      padding-block: 1.2rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .setting-block:first-child { padding-top: 0; }
+    .setting-block:last-of-type { border-bottom: 0; }
+    .setting-copy { min-width: 0; }
+    .setting-title {
+      display: block;
+      color: var(--ink);
+      font-size: .98rem;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+    .setting-help {
+      display: block;
+      max-width: 52ch;
+      margin-top: .2rem;
+      color: var(--ink-soft);
+      font-size: .82rem;
+      line-height: 1.45;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 4px;
+      margin-top: .75rem;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--bg-elevated);
+    }
+    .segmented button {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .38rem;
+      min-height: 46px;
+      min-width: 0;
+      padding: .35rem 1.05rem .35rem .4rem;
+      border: 1.5px solid transparent;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--ink);
+      font-size: .76rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .segmented button[aria-pressed="true"] {
+      background: var(--selected-bg);
+      border-color: var(--selected-bg);
+      color: var(--selected-ink);
+    }
+    .segmented button[aria-pressed="true"]::after {
+      content: "✓";
+      position: absolute;
+      top: 50%;
+      right: 5px;
+      transform: translateY(-50%);
+      font-size: .62rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+    @media (hover: hover) {
+      .segmented button[aria-pressed="false"]:hover { background: var(--surface-2); }
+    }
+    .swatch {
+      width: 15px;
+      height: 15px;
+      flex: 0 0 auto;
+      border: 1px solid currentColor;
+      border-radius: 50%;
+    }
+    .swatch-light { background: #F4F0E6; border-color: #797366; }
+    .swatch-dark { background: #18201C; border-color: #F5F2E8; }
+    .swatch-contrast { background: linear-gradient(90deg, #000 0 50%, #FFE24D 50% 100%); border-color: #FFFFFF; }
+
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      min-height: var(--tap);
+      cursor: pointer;
+    }
+    .switch-copy { min-width: 0; }
+    .switch {
+      position: relative;
+      flex: 0 0 auto;
+      width: 54px;
+      height: 34px;
+    }
+    .switch input {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .switch-track {
+      position: absolute;
+      inset: 0;
+      border: 2px solid var(--line-strong);
+      border-radius: 999px;
+      background: var(--surface-2);
+      transition: background-color .16s ease, border-color .16s ease;
+      pointer-events: none;
+    }
+    .switch-track::after {
+      content: "";
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--ink-soft);
+      transition: transform .16s ease, background-color .16s ease;
+    }
+    .switch input:checked + .switch-track { background: var(--brand); border-color: var(--brand); }
+    .switch input:checked + .switch-track::after { background: var(--brand-ink); transform: translateX(20px); }
+    .switch input:focus-visible + .switch-track {
+      outline: 3px solid var(--focus-ring);
+      outline-offset: 3px;
+      box-shadow: 0 0 0 7px var(--focus-halo);
+    }
+
+    .font-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: .85rem 1.2rem;
+    }
+    .stepper {
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: stretch;
+      overflow: hidden;
+      border: 1.5px solid var(--line-strong);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+    .stepper button {
+      width: 48px;
+      min-width: 48px;
+      min-height: 48px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 1.1rem;
+      font-weight: 800;
+    }
+    @media (hover: hover) { .stepper button:hover:not(:disabled) { background: var(--surface-2); } }
+    .stepper button:disabled { color: var(--ink-soft); cursor: not-allowed; opacity: .55; }
+    .font-value {
+      display: grid;
+      place-items: center;
+      min-width: 4.4rem;
+      padding-inline: .35rem;
+      border-inline: 1px solid var(--line);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: .8rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+    .settings-foot {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: .4rem 1rem;
+      padding-top: 1rem;
+      border-top: 1px dashed var(--line);
+    }
+    .settings-note {
+      max-width: 38ch;
+      color: var(--ink-soft);
+      font-size: .78rem;
+    }
+    .settings-reset {
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--tap);
+      padding: .2rem 0;
+      border: 0;
+      background: none;
+      color: var(--brand);
+      font-size: .8rem;
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: .2em;
+    }
+
+    .practice-card {
+      padding: clamp(1.2rem, 3vw, 1.7rem);
+      border: 1.5px solid var(--line-strong);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+    }
+    .practice-card h3 {
+      font-size: 1.7rem;
+    }
+    .practice-list {
+      display: grid;
+      gap: 1rem;
+      margin-top: 1.2rem;
+      list-style: none;
+    }
+    .practice-item {
+      display: flex;
+      align-items: flex-start;
+      gap: .75rem;
+    }
+    .practice-check {
+      display: grid;
+      place-items: center;
+      width: 27px;
+      height: 27px;
+      flex: 0 0 auto;
+      margin-top: .05rem;
+      border: 1px solid var(--brand);
+      border-radius: 50%;
+      background: var(--brand-soft);
+      color: var(--brand);
+      font-size: .65rem;
+      font-weight: 900;
+    }
+    .practice-item strong {
+      display: block;
+      font-size: .88rem;
+      line-height: 1.35;
+    }
+    .practice-item p {
+      margin-top: .12rem;
+      color: var(--ink-soft);
+      font-size: .8rem;
+      line-height: 1.45;
+    }
+    .shortcut-card {
+      margin-top: 1.15rem;
+      padding: 1.15rem 1.2rem;
+      border-radius: var(--radius-md);
+      background: var(--brand);
+      color: var(--brand-ink);
+    }
+    .shortcut-card .mono {
+      display: block;
+      margin-bottom: .5rem;
+      font-size: .62rem;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    .shortcut-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .35rem .55rem;
+      font-size: .8rem;
+      font-weight: 650;
+      line-height: 1.5;
+    }
+    .shortcut-card kbd {
+      border-width: 1.5px;
+      color: var(--brand-ink);
+    }
+
+    /* =========================================================
+       7. Rodapé e selo
+       ========================================================= */
+    .site-footer {
+      margin-top: 2.5rem;
+      padding-block: 1.8rem 2.2rem;
+      border-top: 1px solid var(--line);
+      color: var(--ink-soft);
+      font-size: .78rem;
+    }
+    .footer-inner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem 2rem;
+    }
+    .footer-brand {
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+    .footer-note { max-width: 48ch; margin-top: .15rem; line-height: 1.5; }
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .2rem 1.1rem;
+    }
+
+    .proto-badge {
+      position: fixed;
+      right: 12px;
+      bottom: 12px;
+      z-index: 40;
+      max-width: calc(100% - 24px);
+      padding: .4rem .65rem;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--ink-soft);
+      font-family: var(--font-mono);
+      font-size: .6rem;
+      font-weight: 700;
+      letter-spacing: .02em;
+      box-shadow: var(--shadow-soft);
+      pointer-events: none;
+    }
+
+    /* =========================================================
+       8. Telas de jogo — estrutura compartilhada
+       ========================================================= */
+    .view { min-height: 60vh; }
+    .game-view { padding-block: clamp(1.4rem, 4vw, 2.8rem) 3rem; }
+    .game-heading {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.4rem;
+    }
+    .game-heading-copy { min-width: 0; }
+    .game-heading h2 {
+      margin-top: .4rem;
+      font-size: clamp(2.5rem, 5.5vw, 4rem);
+      scroll-margin-top: 6rem;
+    }
+    .game-lede {
+      max-width: 58ch;
+      margin-top: .55rem;
+      color: var(--ink-soft);
+      font-size: .94rem;
+    }
+    .game-heading-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .game-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 310px;
+      gap: clamp(1.5rem, 4vw, 2.8rem);
+      align-items: start;
+    }
+    .game-main {
+      width: 100%;
+      max-width: 640px;
+      min-width: 0;
+      margin-inline: auto;
+    }
+    .game-side {
+      display: grid;
+      gap: .9rem;
+      position: sticky;
+      top: 6rem;
+    }
+    .feedback-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .45rem 1.15rem;
+      margin-top: .85rem;
+      padding: .7rem .2rem 0;
+      border-top: 1px solid var(--line);
+      color: var(--ink-soft);
+      font-size: .77rem;
+      font-weight: 600;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: .38rem;
+      line-height: 1.3;
+    }
+    .legend-chip {
+      display: inline-grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      flex: 0 0 auto;
+      border: 1px solid var(--line-strong);
+      border-radius: 5px;
+      font-size: .65rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .keyboard-help {
+      margin-top: .75rem;
+      color: var(--ink-soft);
+      font-size: .74rem;
+      text-align: center;
+    }
+    .info-card {
+      padding: 1.15rem;
+      border: 1.5px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+    }
+    .info-card h3 {
+      font-family: var(--font-body);
+      font-size: .82rem;
+      font-weight: 800;
+      letter-spacing: .01em;
+    }
+    .info-card p, .info-card li {
+      color: var(--ink-soft);
+      font-size: .8rem;
+      line-height: 1.5;
+    }
+    .info-card ul {
+      display: grid;
+      gap: .5rem;
+      margin-top: .7rem;
+      padding-left: 1.1rem;
+    }
+    .shortcut-list {
+      display: grid;
+      gap: .5rem;
+      margin-top: .7rem;
+      list-style: none;
+      padding-left: 0 !important;
+    }
+    .shortcut-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .7rem;
+      padding-bottom: .45rem;
+      border-bottom: 1px dashed var(--line);
+    }
+    .shortcut-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+
+    /* =========================================================
+       9. WordGuess — tabuleiro e teclado
+       ========================================================= */
+    .attempt-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: .5rem 1rem;
+      margin-bottom: .65rem;
+    }
+    .attempt-label {
+      color: var(--ink-soft);
+      font-size: .78rem;
+      font-weight: 600;
+    }
+    .attempt-label strong { color: var(--ink); font-weight: 800; }
+    .attempt-pips { display: flex; gap: 4px; }
+    .attempt-pips span {
+      display: block;
+      width: 22px;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--line);
+    }
+    .attempt-pips span.is-done { background: var(--ink); }
+    .attempt-pips span.is-current { background: var(--brand); }
+
+    .board-shell {
+      padding: clamp(8px, 2.2vw, 18px);
+      border: 1.5px solid var(--line-strong);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+    }
+    .board {
+      display: grid;
+      gap: clamp(5px, 1.5vw, 8px);
+      width: min(100%, 380px);
+      margin-inline: auto;
+    }
+    .board:focus-visible {
+      outline: 3px solid var(--focus-ring);
+      outline-offset: 6px;
+    }
+    .board-row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: clamp(5px, 1.5vw, 8px);
+    }
+    .tile {
+      position: relative;
+      display: grid;
+      place-items: center;
+      aspect-ratio: 1;
+      min-width: 0;
+      border: 2px solid var(--tile-empty-border);
+      border-radius: 10px;
+      background: var(--tile-empty);
+      color: var(--ink);
+      font-size: clamp(1.55rem, 6vw, 2.25rem);
+      font-weight: 800;
+      line-height: 1;
+      text-transform: uppercase;
+      user-select: none;
+    }
+    .tile-letter { position: relative; z-index: 1; }
+    .tile-mark {
+      position: absolute;
+      top: 3px;
+      right: 5px;
+      z-index: 2;
+      display: grid;
+      place-items: center;
+      min-width: 1.1rem;
+      min-height: 1.1rem;
+      padding: .05rem .15rem;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, .16);
+      font-size: clamp(.7rem, 2.2vw, .88rem);
+      font-weight: 900;
+      line-height: 1.15;
+    }
+    .tile-mark:empty, .key-mark:empty { display: none; }
+    .tile[data-state="correct"] {
+      background: var(--correct-bg);
+      border-color: var(--correct-bg);
+      color: var(--correct-ink);
+    }
+    .tile[data-state="present"] {
+      background: var(--present-bg);
+      border-color: var(--present-bg);
+      color: var(--present-ink);
+      background-image: repeating-linear-gradient(135deg, transparent 0 7px, var(--tile-pattern) 7px 8px);
+    }
+    .tile[data-state="absent"] {
+      background: var(--absent-bg);
+      border-color: var(--absent-bg);
+      color: var(--absent-ink);
+      background-image: radial-gradient(var(--tile-pattern) 1px, transparent 1.4px);
+      background-size: 7px 7px;
+    }
+    .tile[data-state="correct"]::after {
+      content: "";
+      position: absolute;
+      inset: 4px;
+      border: 1px solid currentColor;
+      border-radius: 6px;
+      opacity: .28;
+      pointer-events: none;
+    }
+    html[data-theme="contrast"] .tile[data-state="absent"] { border-color: var(--absent-ink); }
+    html[data-theme="contrast"] .state-absent { border-color: var(--absent-ink) !important; }
+
+    .board-row.is-current .tile.is-empty {
+      border-color: var(--ink-soft);
+      border-style: dashed;
+      background: var(--key-bg);
+    }
+    .board-error {
+      min-height: 1.45rem;
+      margin-top: .45rem;
+      color: var(--danger);
+      font-size: .82rem;
+      font-weight: 700;
+      line-height: 1.4;
+      text-align: center;
+    }
+
+    .keyboard {
+      width: 100%;
+      max-width: 570px;
+      margin: 1.25rem auto 0;
+    }
+    .keys-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 3px;
+    }
+    .key-actions {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .key {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-width: 0;
+      min-height: 48px;
+      padding: .35rem .12rem;
+      border: 1.5px solid var(--key-border);
+      border-radius: 8px;
+      background: var(--key-bg);
+      box-shadow: var(--key-shadow);
+      color: var(--ink);
+      font-family: var(--font-body);
+      font-size: 1rem;
+      font-weight: 800;
+      line-height: 1;
+      text-transform: uppercase;
+      touch-action: manipulation;
+      transition: background-color .12s ease, color .12s ease, transform .1s ease;
+    }
+    @media (hover: hover) { .key:hover:not(:disabled) { background: var(--surface-2); } }
+    .key:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
+    .key .key-char { position: relative; z-index: 1; }
+    .key .key-mark {
+      position: absolute;
+      right: 3px;
+      bottom: 2px;
+      z-index: 2;
+      font-size: .6rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .key[data-state="correct"] {
+      background: var(--correct-bg);
+      border-color: var(--correct-bg);
+      color: var(--correct-ink);
+      box-shadow: none;
+    }
+    .key[data-state="present"] {
+      background: var(--present-bg);
+      border-color: var(--present-bg);
+      color: var(--present-ink);
+      box-shadow: none;
+      background-image: repeating-linear-gradient(135deg, transparent 0 8px, var(--tile-pattern) 8px 9px);
+    }
+    .key[data-state="absent"], .key[data-state="wrong"] {
+      background: var(--absent-bg);
+      border-color: var(--absent-bg);
+      color: var(--absent-ink);
+      box-shadow: none;
+    }
+    .key[data-state="absent"] .key-char,
+    .key[data-state="wrong"] .key-char { opacity: .92; }
+    .key:disabled { cursor: default; opacity: 1; }
+    .key--action {
+      font-family: var(--font-body);
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .01em;
+      text-transform: none;
+    }
+    html[data-theme="contrast"] .key[data-state="absent"],
+    html[data-theme="contrast"] .key[data-state="wrong"] {
+      border-color: var(--absent-ink);
+    }
+
+    /* =========================================================
+       10. Forca
+       ========================================================= */
+    .forca-status {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: .65rem 1.2rem;
+      padding: .9rem 1rem;
+      border: 1.5px solid var(--line-strong);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+    }
+    .lives-block { min-width: 0; }
+    .lives {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 5px;
+    }
+    .life {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 31px;
+      height: 31px;
+      flex: 0 0 auto;
+      border: 1.5px solid var(--brand);
+      border-radius: 50%;
+      background: var(--brand-soft);
+      color: var(--brand);
+      font-size: .82rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .life .life-x { display: none; font-size: 1rem; }
+    .life.is-lost {
+      border-style: dashed;
+      border-color: var(--ink-soft);
+      background: transparent;
+      color: var(--ink-soft);
+    }
+    .life.is-lost .life-heart { display: none; }
+    .life.is-lost .life-x { display: block; }
+    .lives-count {
+      margin-left: .35rem;
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: .78rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .forca-feedback {
+      flex: 1 1 200px;
+      min-height: 1.4rem;
+      color: var(--ink-soft);
+      font-size: .82rem;
+      font-weight: 600;
+      line-height: 1.4;
+      text-align: right;
+    }
+    .forca-feedback.is-good { color: var(--brand); }
+    .forca-feedback.is-bad { color: var(--danger); }
+
+    .word-card {
+      margin-top: .85rem;
+      padding: clamp(1rem, 3vw, 1.6rem);
+      border: 1.5px solid var(--line-strong);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+    }
+    .word-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: .35rem 1rem;
+      margin-bottom: 1rem;
+      color: var(--ink-soft);
+      font-family: var(--font-mono);
+      font-size: .68rem;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .word-slots {
+      display: flex;
+      justify-content: center;
+      gap: clamp(3px, 1.2vw, 10px);
+      width: 100%;
+    }
+    .letter-slot {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      flex: 1 1 0;
+      max-width: 64px;
+      min-width: 0;
+      height: clamp(48px, 9vw, 68px);
+      padding-bottom: .35rem;
+      border-bottom: 3px solid var(--line-strong);
+      color: var(--ink);
+      font-size: clamp(1.25rem, 5.8vw, 2rem);
+      font-weight: 800;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+    .letter-slot.is-on { border-color: var(--brand); }
+    .letter-slot .slot-letter { display: block; overflow: hidden; }
+    @keyframes reveal-letter {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .letter-slot.just-revealed .slot-letter { animation: reveal-letter .24s ease both; }
+
+    .forca-legend .legend-chip { font-family: var(--font-mono); }
+    .forca-keyboard { margin-top: 1.1rem; }
+    .forca-keyboard .keys-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+
+    /* =========================================================
+       11. Resultado e compartilhamento
+       ========================================================= */
+    .result-panel {
+      position: relative;
+      margin-top: 1rem;
+      padding: clamp(1.1rem, 3vw, 1.6rem);
+      border: 2px solid var(--brand);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      animation: result-in .26s ease both;
+    }
+    @keyframes result-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .result-kicker {
+      font-family: var(--font-mono);
+      font-size: .64rem;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+      color: var(--brand);
+    }
+    .result-heading {
+      margin-top: .35rem;
+      font-size: clamp(1.8rem, 4vw, 2.35rem);
+      scroll-margin-block: 7rem;
+    }
+    .result-copy {
+      margin-top: .45rem;
+      color: var(--ink-soft);
+      font-size: .88rem;
+    }
+    .result-word {
+      margin-top: .9rem;
+      padding: .4rem .8rem;
+      border-left: 3px solid var(--brand);
+      background: var(--brand-soft);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: clamp(1.35rem, 5.4vw, 1.9rem);
+      font-weight: 800;
+      letter-spacing: .12em;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+    .result-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .55rem;
+      margin-top: 1rem;
+    }
+    .result-actions .btn { flex: 1 1 auto; }
+    .share-note {
+      min-height: 1.4rem;
+      margin-top: .75rem;
+      color: var(--ink-soft);
+      font-size: .78rem;
+      font-weight: 600;
+    }
+    .share-note.is-success { color: var(--brand); }
+    .manual-share {
+      margin-top: .75rem;
+      padding-top: .75rem;
+      border-top: 1px dashed var(--line);
+    }
+    .manual-share label {
+      display: block;
+      margin-bottom: .4rem;
+      font-size: .8rem;
+      font-weight: 700;
+    }
+    .manual-share textarea {
+      width: 100%;
+      min-height: 96px;
+      padding: .65rem;
+      border: 1.5px solid var(--line-strong);
+      border-radius: 10px;
+      background: var(--bg-elevated);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: .78rem;
+      line-height: 1.5;
+      resize: vertical;
+    }
+
+    /* =========================================================
+       12. Modal acessível
+       ========================================================= */
+    body.modal-open { overflow: hidden; }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: grid;
+      place-items: center;
+      padding: 1rem;
+      overflow-y: auto;
+      background: rgba(5, 8, 6, .74);
+      backdrop-filter: blur(5px);
+    }
+    .modal {
+      position: relative;
+      width: min(720px, 100%);
+      max-height: calc(100dvh - 2rem);
+      overflow-x: hidden;
+      overflow-y: auto;
+      padding: clamp(1.4rem, 4vw, 2.5rem);
+      border: 1.5px solid var(--line-strong);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: 0 40px 100px -30px #000;
+      animation: modal-in .2s ease both;
+    }
+    @keyframes modal-in {
+      from { opacity: 0; transform: translateY(10px) scale(.99); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .modal-close {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      z-index: 3;
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border: 1.5px solid var(--line-strong);
+      border-radius: 50%;
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 1.4rem;
+      line-height: 1;
+    }
+    @media (hover: hover) { .modal-close:hover { background: var(--surface-2); } }
+    .modal-title {
+      padding-right: 3.2rem;
+      font-size: clamp(2rem, 5vw, 2.8rem);
+      scroll-margin-top: 1rem;
+    }
+    .modal-lede {
+      max-width: 60ch;
+      margin-top: .6rem;
+      color: var(--ink-soft);
+      font-size: .9rem;
+    }
+    .modal-content { margin-top: 1.2rem; }
+    .modal .settings-card {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+    .modal .settings-card .setting-block:first-child { padding-top: 1rem; border-top: 1px solid var(--line); }
+
+    .rules-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .9rem;
+      margin-top: 1.35rem;
+    }
+    .rule-card {
+      padding: 1rem;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-md);
+      background: var(--bg-elevated);
+    }
+    .rule-card h3 {
+      font-family: var(--font-body);
+      font-size: .84rem;
+      font-weight: 800;
+      letter-spacing: .01em;
+    }
+    .rule-card p {
+      margin-top: .35rem;
+      color: var(--ink-soft);
+      font-size: .8rem;
+      line-height: 1.5;
+    }
+    .rule-card .rule-legend {
+      display: grid;
+      gap: .4rem;
+      margin-top: .7rem;
+      list-style: none;
+      font-size: .78rem;
+      color: var(--ink-soft);
+    }
+    .rule-card .rule-legend li { display: flex; align-items: center; gap: .45rem; }
+    .modal-note {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .4rem .8rem;
+      margin-top: 1rem;
+      padding: .8rem .9rem;
+      border-left: 3px solid var(--brand);
+      background: var(--brand-soft);
+      color: var(--ink);
+      font-size: .8rem;
+      line-height: 1.5;
+    }
+    .modal-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: .5rem;
+      margin-top: 1.35rem;
+    }
+    .popover-note { margin-top: .8rem; color: var(--ink-soft); font-size: .78rem; }
+
+    /* =========================================================
+       13. Responsivo
+       ========================================================= */
+    @media (min-width: 560px) {
+      .header-a11y-text { display: inline; }
+      .keys-grid, .forca-keyboard .keys-grid { grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; }
+      .key-actions { gap: 8px; margin-top: 8px; }
+      .key { min-height: 50px; }
+    }
+
+    @media (max-width: 1020px) {
+      .game-layout { grid-template-columns: minmax(0, 1fr); }
+      .game-main { max-width: 640px; }
+      .game-side {
+        position: static;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+        max-width: 640px;
+        margin-inline: auto;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .a11y-head { grid-template-columns: minmax(0, 1fr); }
+      .a11y-layout { grid-template-columns: minmax(0, 1fr); }
+      .practice-card { max-width: none; }
+    }
+
+    @media (max-width: 720px) {
+      .hero {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 2.2rem;
+        padding-top: clamp(2rem, 6vw, 3.5rem);
+      }
+      .hero-board { justify-self: start; width: min(100%, 440px); transform: none; }
+    }
+
+    @media (max-width: 760px) {
+      .mode-grid { grid-template-columns: minmax(0, 1fr); }
+      .mode-card { min-height: 0; }
+      .mode-cta { margin-top: 1.2rem; }
+    }
+
+    @media (max-width: 600px) {
+      .container { width: calc(100% - 2rem); }
+      .header-inner { min-height: 62px; }
+      .site-header .btn-sm { font-size: .78rem; padding-inline: .65rem; }
+      .hero-title { font-size: clamp(3rem, 22vw, 6rem); }
+      .hero-board { box-shadow: 7px 8px 0 var(--brand-soft), var(--shadow); }
+      .a11y-head { margin-bottom: 1.1rem; }
+      .rules-grid { grid-template-columns: minmax(0, 1fr); }
+      .game-side { grid-template-columns: minmax(0, 1fr); }
+      .forca-status { align-items: flex-start; }
+      .forca-feedback { text-align: left; flex-basis: 100%; }
+      .result-actions .btn { flex-basis: 100%; }
+      .game-heading h2 { font-size: clamp(2.4rem, 11vw, 3.4rem); }
+      .modal { padding: 1.25rem; border-radius: 18px; }
+      .modal-close { top: .7rem; right: .7rem; }
+      .modal-title { padding-right: 2.8rem; }
+      .footer-inner { display: block; }
+      .footer-links { margin-top: .5rem; }
+      .proto-badge { font-size: .55rem; padding: .35rem .55rem; }
+    }
+
+    /* Em 320px, 7 colunas ficariam abaixo de 44px. Passa para 6. */
+    @media (max-width: 359px) {
+      .keys-grid, .forca-keyboard .keys-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+      .container { width: calc(100% - 1.5rem); }
+      .header-actions { gap: .35rem; }
+      .hero-actions .btn { flex-basis: 100%; }
+    }
+
+    /* Em telas estreitas, três segmentos lado a lado ficariam apertados.
+       Empilhar mantém rótulos inteiros e alvos confortáveis. */
+    @media (max-width: 479px) {
+      .segmented { grid-template-columns: minmax(0, 1fr); }
+      .segmented button { justify-content: flex-start; padding-left: .75rem; min-height: 44px; }
+      .segmented button[aria-pressed="true"]::after { right: .75rem; }
+    }
+
+    /* =========================================================
+       14. Preferências do sistema e movimento
+       ========================================================= */
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    html.reduce-motion { scroll-behavior: auto; }
+    html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after {
+      animation-duration: .01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: .01ms !important;
+      scroll-behavior: auto !important;
+    }
+
+    @media (prefers-contrast: more) {
+      html:not([data-theme="contrast"]) {
+        --line: #6E6759;
+        --line-strong: #242923;
+        --ink-soft: #2F342E;
+        --ink-faint: #2F342E;
+        --key-border: #242923;
+        --tile-empty-border: #242923;
+      }
+      html[data-theme="dark"]:not([data-theme="contrast"]) {
+        --line: #A8B7AE;
+        --line-strong: #E3EAE5;
+        --ink-soft: #ECEFEA;
+        --ink-faint: #ECEFEA;
+        --key-border: #E3EAE5;
+        --tile-empty-border: #E3EAE5;
+      }
+      .site-header { backdrop-filter: none; }
+      .mode-card, .settings-card, .practice-card, .board-shell, .word-card,
+      .result-panel, .info-card, .forca-status, .modal, .segmented, .stepper {
+        border-width: 2px;
+        border-color: var(--line-strong);
+      }
+      .key, .btn { border-width: 2px; }
+    }
+
+    @media (forced-colors: active) {
+      .btn, .key, .tile, .mode-card, .settings-card, .practice-card, .board-shell,
+      .word-card, .result-panel, .info-card, .forca-status, .modal, .stepper, .segmented {
+        border: 1px solid ButtonText;
+      }
+      .mode-card, .btn-primary, .shortcut-card { forced-color-adjust: auto; }
+      .state-correct, .state-present, .state-absent {
+        forced-color-adjust: none;
+      }
+    }
+  </style>
+</head>
+
+<body data-view="home">
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
+  <div id="app">
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="#home" aria-label="Deduzi — ir para o início">
+          <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+          <span class="brand-name">Deduzi</span>
+        </a>
+        <nav class="header-actions" aria-label="Ações do site">
+          <button class="btn btn-ghost btn-sm" type="button" data-open-rules>Como jogar</button>
+          <button class="header-a11y" type="button" data-open-a11y aria-label="Abrir painel de acessibilidade">
+            <span class="aa" aria-hidden="true">Aa</span>
+            <span class="header-a11y-text" aria-hidden="true">Acessibilidade</span>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main id="conteudo" tabindex="-1">
+      <!-- =====================================================
+           HOME
+           ===================================================== -->
+      <section class="view home" id="view-home" aria-labelledby="home-title">
+        <div class="container">
+          <div class="hero">
+            <div class="hero-copy">
+              <p class="eyebrow">Jogo de palavras · PT-BR</p>
+              <h1 class="hero-title view-heading" id="home-title" tabindex="-1">
+                <span>Deduzi</span><span class="title-tile" aria-hidden="true"></span>
+              </h1>
+              <p class="hero-lede">Duas formas de chegar à palavra certa. Do seu jeito, no seu ritmo.</p>
+              <p class="hero-sub">Dedução, vocabulário e um pouco de sorte — sem tempo limite, sem cadastro e sem pressa. Feito para ser lido, tocado e jogado por todo mundo.</p>
+              <div class="hero-actions">
+                <button class="btn btn-primary" type="button" data-open-rules>Como jogar</button>
+                <a class="btn btn-ghost" href="#acessibilidade" data-jump-a11y>Ver recursos de acessibilidade</a>
+              </div>
+              <ul class="trust-row" aria-label="Características do jogo">
+                <li>100% gratuito</li>
+                <li>Sem cadastro</li>
+                <li>Funciona no celular</li>
+              </ul>
+            </div>
+
+            <aside class="hero-board" aria-hidden="true">
+              <span class="hero-board-stamp">exemplo de feedback</span>
+              <div class="hero-board-head">
+                <span>Uma palavra. Seis tentativas.</span>
+                <span class="mono">rodada 01</span>
+              </div>
+              <div class="demo-tiles">
+                <div class="demo-tile state-present">L<span class="demo-mark">~</span></div>
+                <div class="demo-tile state-absent">I<span class="demo-mark">×</span></div>
+                <div class="demo-tile state-correct">V<span class="demo-mark">✓</span></div>
+                <div class="demo-tile state-absent">R<span class="demo-mark">×</span></div>
+                <div class="demo-tile state-present">O<span class="demo-mark">~</span></div>
+              </div>
+              <div class="demo-legend">
+                <span><b>✓</b> posição certa</span>
+                <span><b>~</b> outra posição</span>
+                <span><b>×</b> fora da palavra</span>
+              </div>
+              <p class="hero-board-caption">A cor reforça. O símbolo garante. Nunca só um dos dois.</p>
+            </aside>
+          </div>
+
+          <!-- Modos -->
+          <section class="modes" id="modos" aria-labelledby="modes-title">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Escolha um modo</p>
+                <h2 id="modes-title">Como você quer jogar hoje?</h2>
+              </div>
+              <p>Sem limite de partidas e sem relógio. Recomece quantas vezes quiser.</p>
+            </div>
+
+            <div class="mode-grid">
+              <a class="mode-card" href="#wordguess" aria-describedby="wg-desc">
+                <div class="mode-top">
+                  <span class="mode-num">01</span>
+                  <span class="chip">5 letras · 6 tentativas</span>
+                </div>
+                <div class="mode-art" aria-hidden="true">
+                  <div class="mini-board">
+                    <span class="mini-tile state-present">L<span class="demo-mark">~</span></span>
+                    <span class="mini-tile state-absent">I<span class="demo-mark">×</span></span>
+                    <span class="mini-tile state-correct">V<span class="demo-mark">✓</span></span>
+                    <span class="mini-tile state-absent">R<span class="demo-mark">×</span></span>
+                    <span class="mini-tile state-present">O<span class="demo-mark">~</span></span>
+                  </div>
+                </div>
+                <h3>WordGuess</h3>
+                <p id="wg-desc">Descubra a palavra escondida pela posição das letras.</p>
+                <span class="mode-cta">Jogar WordGuess <span class="mode-arrow" aria-hidden="true">→</span></span>
+              </a>
+
+              <a class="mode-card" href="#forca" aria-describedby="forca-desc">
+                <div class="mode-top">
+                  <span class="mode-num">02</span>
+                  <span class="chip">6 vidas · letra a letra</span>
+                </div>
+                <div class="mode-art" aria-hidden="true">
+                  <div>
+                    <div class="mini-word">
+                      <span class="mini-slot is-on">C</span>
+                      <span class="mini-slot"></span>
+                      <span class="mini-slot is-on">M</span>
+                      <span class="mini-slot is-on">I</span>
+                      <span class="mini-slot is-on">S</span>
+                      <span class="mini-slot is-on">A</span>
+                    </div>
+                    <div class="mini-lives">
+                      <span>♥</span><span>♥</span><span>♥</span><span>♥</span><span>♥</span><span class="lost">×</span>
+                    </div>
+                  </div>
+                </div>
+                <h3>Forca</h3>
+                <p id="forca-desc">Adivinhe letra a letra antes que as seis vidas acabem.</p>
+                <span class="mode-cta">Jogar Forca <span class="mode-arrow" aria-hidden="true">→</span></span>
+              </a>
+            </div>
+          </section>
+
+          <!-- Painel de acessibilidade (visível na Home) -->
+          <section class="a11y-section" id="acessibilidade" aria-labelledby="a11y-title">
+            <div class="a11y-head">
+              <div>
+                <p class="eyebrow">Preferências</p>
+                <h2 id="a11y-title" tabindex="-1">Acessibilidade</h2>
+              </div>
+              <p>Ajuste a experiência para o seu jeito de ler e jogar. As mudanças são aplicadas na hora e ficam salvas neste dispositivo.</p>
+            </div>
+
+            <div class="a11y-layout">
+              <div class="settings-card" data-settings-card>
+                <!-- Tema -->
+                <div class="setting-block">
+                  <div class="setting-copy">
+                    <span class="setting-title">Tema</span>
+                    <span class="setting-help">Claro, escuro ou alto contraste. Todos mantêm o texto legível e o foco bem visível.</span>
+                  </div>
+                  <div class="segmented" role="group" aria-label="Tema da interface">
+                    <button type="button" data-theme-choice="light" aria-pressed="true">
+                      <span class="swatch swatch-light" aria-hidden="true"></span>
+                      <span>Claro</span>
+                    </button>
+                    <button type="button" data-theme-choice="dark" aria-pressed="false">
+                      <span class="swatch swatch-dark" aria-hidden="true"></span>
+                      <span>Escuro</span>
+                    </button>
+                    <button type="button" data-theme-choice="contrast" aria-pressed="false">
+                      <span class="swatch swatch-contrast" aria-hidden="true"></span>
+                      <span>Alto contraste</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Daltonismo -->
+                <div class="setting-block">
+                  <label class="switch-row">
+                    <span class="switch-copy">
+                      <span class="setting-title">Modo daltonismo</span>
+                      <span class="setting-help">Troca verde/âmbar por azul/laranja. Os símbolos ✓, ~ e × continuam em cada tile.</span>
+                    </span>
+                    <span class="switch">
+                      <input type="checkbox" role="switch" data-toggle="colorblind">
+                      <span class="switch-track" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                </div>
+
+                <!-- Tamanho do texto -->
+                <div class="setting-block">
+                  <div class="font-row">
+                    <div class="setting-copy">
+                      <span class="setting-title">Tamanho do texto</span>
+                      <span class="setting-help">Aumente ou diminua a leitura sem mexer no zoom do navegador.</span>
+                    </div>
+                    <div class="stepper" role="group" aria-label="Tamanho do texto, atual 100%" data-font-group>
+                      <button type="button" data-font="down" aria-label="Diminuir tamanho do texto">A−</button>
+                      <span class="font-value" data-font-value aria-hidden="true">100%</span>
+                      <button type="button" data-font="up" aria-label="Aumentar tamanho do texto">A+</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Movimento -->
+                <div class="setting-block">
+                  <label class="switch-row">
+                    <span class="switch-copy">
+                      <span class="setting-title">Movimento reduzido</span>
+                      <span class="setting-help">Remove animações e transições. A preferência do sistema também é respeitada automaticamente.</span>
+                    </span>
+                    <span class="switch">
+                      <input type="checkbox" role="switch" data-toggle="motion">
+                      <span class="switch-track" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                </div>
+
+                <div class="settings-foot">
+                  <p class="settings-note">Preferências salvas apenas neste navegador. Nenhum dado é enviado.</p>
+                  <button class="settings-reset" type="button" data-reset-settings>Restaurar padrões</button>
+                </div>
+              </div>
+
+              <aside class="a11y-aside" aria-labelledby="practices-title">
+                <div class="practice-card">
+                  <h3 id="practices-title">Acessível por padrão</h3>
+                  <ul class="practice-list">
+                    <li class="practice-item">
+                      <span class="practice-check" aria-hidden="true">✓</span>
+                      <div><strong>Nunca só cor</strong><p>Cada estado tem cor, padrão e símbolo — além de descrição para leitores de tela.</p></div>
+                    </li>
+                    <li class="practice-item">
+                      <span class="practice-check" aria-hidden="true">✓</span>
+                      <div><strong>Teclado de ponta a ponta</strong><p>Tab, Enter, Esc e digitação direta. O foco é sempre visível e na ordem certa.</p></div>
+                    </li>
+                    <li class="practice-item">
+                      <span class="practice-check" aria-hidden="true">✓</span>
+                      <div><strong>Alvos de 44 px</strong><p>Botões, teclas e controles confortáveis para o toque, sem apertos.</p></div>
+                    </li>
+                    <li class="practice-item">
+                      <span class="practice-check" aria-hidden="true">✓</span>
+                      <div><strong>Contraste de verdade</strong><p>Textos em AA/AAA no claro, no escuro e no alto contraste. Zoom de 200% sem quebra.</p></div>
+                    </li>
+                  </ul>
+                </div>
+                <div class="shortcut-card">
+                  <span class="mono">Atalhos</span>
+                  <p class="shortcut-line"><kbd>Tab</kbd> navega <span aria-hidden="true">·</span> <kbd>Enter</kbd> ativa <span aria-hidden="true">·</span> <kbd>Esc</kbd> fecha</p>
+                </div>
+              </aside>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <!-- =====================================================
+           WORDGUESS
+           ===================================================== -->
+      <section class="view game-view" id="view-wordguess" aria-labelledby="wg-title" hidden>
+        <div class="container">
+          <div class="game-heading">
+            <div class="game-heading-copy">
+              <p class="eyebrow">Modo 01 · Dedução por posição</p>
+              <h2 class="view-heading" id="wg-title" tabindex="-1">WordGuess</h2>
+              <p class="game-lede">Descubra a palavra de cinco letras em até seis tentativas. Cada tentativa aproxima você da resposta.</p>
+            </div>
+            <div class="game-heading-actions">
+              <a class="btn btn-ghost btn-sm" href="#home">← Início</a>
+            </div>
+          </div>
+
+          <div class="game-layout">
+            <div class="game-main">
+              <div class="attempt-bar">
+                <p class="attempt-label">Tentativa <strong id="wg-attempt">1</strong> de 6</p>
+                <div class="attempt-pips" id="wg-pips" aria-hidden="true"></div>
+              </div>
+
+              <div class="board-shell">
+                <div class="board" id="wg-board" role="group" tabindex="-1" aria-label="Tabuleiro do WordGuess. Seis tentativas de cinco letras."></div>
+                <p class="board-error" id="wg-message"></p>
+              </div>
+
+              <div class="feedback-legend" role="group" aria-label="Legenda de feedback">
+                <span class="legend-item"><span class="legend-chip state-correct" aria-hidden="true">✓</span> Posição certa</span>
+                <span class="legend-item"><span class="legend-chip state-present" aria-hidden="true">~</span> Outra posição</span>
+                <span class="legend-item"><span class="legend-chip state-absent" aria-hidden="true">×</span> Fora da palavra</span>
+              </div>
+
+              <div class="result-panel" id="wg-result" hidden>
+                <p class="result-kicker" id="wg-result-kicker">Vitória</p>
+                <h3 class="result-heading" id="wg-result-title" tabindex="-1">Você acertou!</h3>
+                <p class="result-copy" id="wg-result-copy"></p>
+                <p class="result-word" id="wg-result-word"></p>
+                <div class="result-actions">
+                  <button class="btn btn-primary" type="button" data-share="wordguess">Compartilhar resultado</button>
+                  <button class="btn btn-secondary" type="button" data-restart="wordguess">Jogar de novo</button>
+                  <a class="btn btn-quiet" href="#home">Início</a>
+                </div>
+                <p class="share-note" data-share-note></p>
+                <div class="manual-share" data-manual-share hidden>
+                  <label for="wg-manual-text">Selecione e copie o resultado</label>
+                  <textarea id="wg-manual-text" readonly></textarea>
+                </div>
+              </div>
+
+              <div class="keyboard" id="wg-keyboard" role="group" aria-label="Teclado virtual do WordGuess" aria-controls="wg-board">
+                <div class="keys-grid" id="wg-keys"></div>
+                <div class="key-actions">
+                  <button class="key key--action" type="button" data-action="submit" aria-label="Enviar tentativa">Enter</button>
+                  <button class="key key--action" type="button" data-action="delete" aria-label="Apagar última letra">Apagar</button>
+                </div>
+              </div>
+              <p class="keyboard-help">Use <kbd>Tab</kbd> para navegar e <kbd>Enter</kbd> para ativar. No desktop, também é possível digitar direto.</p>
+
+              <div class="sr-only" id="wg-announcer" role="status" aria-live="polite" aria-atomic="true"></div>
+            </div>
+
+            <aside class="game-side" aria-label="Ajuda do WordGuess">
+              <div class="info-card">
+                <h3>Leia o tabuleiro</h3>
+                <ul>
+                  <li><strong>✓ posição certa:</strong> letra correta no lugar correto.</li>
+                  <li><strong>~ outra posição:</strong> a letra existe, mas em outro lugar.</li>
+                  <li><strong>× fora:</strong> a letra não aparece na palavra.</li>
+                </ul>
+              </div>
+              <div class="info-card">
+                <h3>Atalhos</h3>
+                <ul class="shortcut-list">
+                  <li><span>Digitar letras</span><kbd>A–Z</kbd></li>
+                  <li><span>Enviar tentativa</span><kbd>Enter</kbd></li>
+                  <li><span>Apagar letra</span><kbd>Backspace</kbd></li>
+                </ul>
+              </div>
+              <div class="info-card">
+                <h3>Sem pressa</h3>
+                <p>Não há cronômetro. Você pode pensar, revisar a legenda e usar as letras repetidas com calma.</p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================
+           FORCA
+           ===================================================== -->
+      <section class="view game-view" id="view-forca" aria-labelledby="forca-title" hidden>
+        <div class="container">
+          <div class="game-heading">
+            <div class="game-heading-copy">
+              <p class="eyebrow">Modo 02 · Letra a letra</p>
+              <h2 class="view-heading" id="forca-title" tabindex="-1">Forca</h2>
+              <p class="game-lede">Descubra a palavra escolhendo letras. Cada letra fora da palavra custa uma das seis vidas.</p>
+            </div>
+            <div class="game-heading-actions">
+              <a class="btn btn-ghost btn-sm" href="#home">← Início</a>
+            </div>
+          </div>
+
+          <div class="game-layout">
+            <div class="game-main">
+              <div class="forca-status">
+                <div class="lives-block">
+                  <div class="lives" id="forca-lives" role="img" aria-label="6 de 6 vidas restantes">
+                    <span class="life" aria-hidden="true"><span class="life-heart">♥</span><span class="life-x">×</span></span>
+                    <span class="life" aria-hidden="true"><span class="life-heart">♥</span><span class="life-x">×</span></span>
+                    <span class="life" aria-hidden="true"><span class="life-heart">♥</span><span class="life-x">×</span></span>
+                    <span class="life" aria-hidden="true"><span class="life-heart">♥</span><span class="life-x">×</span></span>
+                    <span class="life" aria-hidden="true"><span class="life-heart">♥</span><span class="life-x">×</span></span>
+                    <span class="life" aria-hidden="true"><span class="life-heart">♥</span><span class="life-x">×</span></span>
+                    <span class="lives-count" aria-hidden="true">6/6 vidas</span>
+                  </div>
+                </div>
+                <p class="forca-feedback" id="forca-message">Escolha uma letra para começar.</p>
+              </div>
+
+              <div class="word-card">
+                <div class="word-meta">
+                  <span id="forca-length">Palavra oculta</span>
+                  <span id="forca-used">0 tentativas</span>
+                </div>
+                <div class="word-slots" id="forca-word" role="group" aria-label="Palavra oculta"></div>
+              </div>
+
+              <div class="feedback-legend forca-legend" role="group" aria-label="Legenda de feedback">
+                <span class="legend-item"><span class="legend-chip state-correct" aria-hidden="true">✓</span> Letra na palavra</span>
+                <span class="legend-item"><span class="legend-chip state-absent" aria-hidden="true">×</span> Letra fora · perde 1 vida</span>
+              </div>
+
+              <div class="result-panel" id="forca-result" hidden>
+                <p class="result-kicker" id="forca-result-kicker">Palavra revelada</p>
+                <h3 class="result-heading" id="forca-result-title" tabindex="-1">Você venceu!</h3>
+                <p class="result-copy" id="forca-result-copy"></p>
+                <p class="result-word" id="forca-result-word"></p>
+                <div class="result-actions">
+                  <button class="btn btn-primary" type="button" data-share="forca">Compartilhar resultado</button>
+                  <button class="btn btn-secondary" type="button" data-restart="forca">Jogar de novo</button>
+                  <a class="btn btn-quiet" href="#home">Início</a>
+                </div>
+                <p class="share-note" data-share-note></p>
+                <div class="manual-share" data-manual-share hidden>
+                  <label for="forca-manual-text">Selecione e copie o resultado</label>
+                  <textarea id="forca-manual-text" readonly></textarea>
+                </div>
+              </div>
+
+              <div class="keyboard forca-keyboard" id="forca-keyboard" role="group" aria-label="Teclado virtual de letras da Forca" aria-controls="forca-word">
+                <div class="keys-grid" id="forca-keys"></div>
+              </div>
+              <p class="keyboard-help">Use <kbd>Tab</kbd> para navegar e <kbd>Enter</kbd> para escolher. No desktop, também é possível digitar direto.</p>
+
+              <div class="sr-only" id="forca-announcer" role="status" aria-live="polite" aria-atomic="true"></div>
+            </div>
+
+            <aside class="game-side" aria-label="Ajuda da Forca">
+              <div class="info-card">
+                <h3>Como vencer</h3>
+                <ul>
+                  <li>Revele todas as letras da palavra.</li>
+                  <li>Cada erro custa <strong>1 vida</strong>.</li>
+                  <li>Você tem <strong>6 vidas</strong> por partida.</li>
+                </ul>
+              </div>
+              <div class="info-card">
+                <h3>Atalhos</h3>
+                <ul class="shortcut-list">
+                  <li><span>Escolher letra</span><kbd>A–Z</kbd></li>
+                  <li><span>Navegar</span><kbd>Tab</kbd></li>
+                  <li><span>Ativar letra</span><kbd>Enter</kbd></li>
+                </ul>
+              </div>
+              <div class="info-card">
+                <h3>Contagem clara</h3>
+                <p>As vidas restantes aparecem em número, corações e texto. A cada erro, o resultado é anunciado em tempo real.</p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <div>
+          <p class="footer-brand">Deduzi</p>
+          <p class="footer-note">Protótipo conceitual de jogo casual de palavras em PT-BR. Sem contas, anúncios ou rastreamento.</p>
+        </div>
+        <nav class="footer-links" aria-label="Links do rodapé">
+          <button class="link-button" type="button" data-open-rules>Como jogar</button>
+          <button class="link-button" type="button" data-open-a11y>Acessibilidade</button>
+        </nav>
+      </div>
+    </footer>
+  </div>
+
+  <span class="proto-badge">Protótipo 02 · Foco em Acessibilidade</span>
+
+  <!-- Live region global: preferências, compartilhamento e mensagens gerais -->
+  <div class="sr-only" id="global-live" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- =========================================================
+       MODAL (conteúdo trocado por JS)
+       ========================================================= -->
+  <div class="modal-backdrop" id="modal-root" hidden>
+    <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
+      <button class="modal-close" type="button" data-close-modal aria-label="Fechar janela">×</button>
+      <h2 class="modal-title" id="modal-title">Como jogar</h2>
+      <div class="modal-content" id="modal-content"></div>
+    </div>
+  </div>
+
+  <template id="tpl-rules">
+    <p class="modal-lede">Dois jeitos de brincar com palavras. Nenhum tem tempo limite — e todos os feedbacks combinam cor, símbolo e descrição.</p>
+    <div class="rules-grid">
+      <section class="rule-card" aria-labelledby="rules-wg">
+        <h3 id="rules-wg">WordGuess</h3>
+        <p>Descubra a palavra de 5 letras em 6 tentativas. Digite uma palavra por linha e confirme. Neste protótipo, qualquer sequência de 5 letras é aceita.</p>
+        <ul class="rule-legend">
+          <li><span class="legend-chip state-correct" aria-hidden="true">✓</span> Letra certa, posição certa.</li>
+          <li><span class="legend-chip state-present" aria-hidden="true">~</span> Letra existe, mas em outra posição.</li>
+          <li><span class="legend-chip state-absent" aria-hidden="true">×</span> Letra não aparece na palavra.</li>
+        </ul>
+      </section>
+      <section class="rule-card" aria-labelledby="rules-forca">
+        <h3 id="rules-forca">Forca</h3>
+        <p>Escolha letras para revelar a palavra. Você começa com 6 vidas; cada letra que não existe na palavra custa uma vida. Revele todas as letras para vencer.</p>
+        <ul class="rule-legend">
+          <li><span class="legend-chip state-correct" aria-hidden="true">✓</span> A letra está na palavra.</li>
+          <li><span class="legend-chip state-absent" aria-hidden="true">×</span> A letra não está; perde 1 vida.</li>
+        </ul>
+      </section>
+    </div>
+    <div class="modal-note">
+      <span aria-hidden="true">✓</span>
+      <span><strong>Dica de acessibilidade:</strong> no desktop, digite as letras direto. Use Tab e Enter para navegar pelo teclado virtual. Se preferir, ajuste tema, contraste, cores e tamanho do texto em Acessibilidade.</span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" type="button" data-close-modal>Entendi</button>
+    </div>
+  </template>
+
+  <noscript>
+    <p style="max-width:60ch;margin:1rem auto;padding:1rem;border:2px solid #9B1C24;background:#FFFDF8;color:#161A17;font-family:system-ui,sans-serif;">
+      Este protótipo precisa de JavaScript para jogar. Ative o JavaScript no navegador para experimentar o WordGuess e a Forca.
+    </p>
+  </noscript>
+
+  <script>
+    (() => {
+      'use strict';
+
+      /* =====================================================
+         Utilidades
+         ===================================================== */
+      const $ = (selector, root = document) => root.querySelector(selector);
+      const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+      const root = document.documentElement;
+      const app = $('#app');
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const prefersContrast = window.matchMedia('(prefers-contrast: more)');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const PREFS_KEY = 'deduzi.prefs.v1';
+
+      const motionReduced = () => root.classList.contains('reduce-motion');
+
+      /** Anuncia em uma live region. Limpar antes garante repetição do mesmo texto. */
+      function speak(element, message) {
+        if (!element) return;
+        window.clearTimeout(element._speakTimer);
+        element.textContent = '';
+        element._speakTimer = window.setTimeout(() => {
+          element.textContent = message;
+        }, 60);
+      }
+
+      const globalLive = $('#global-live');
+      const announceGlobal = (message) => speak(globalLive, message);
+
+      function savePrefs() {
+        try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) { /* modo privado */ }
+      }
+
+      function loadPrefs() {
+        const defaults = {
+          theme: prefersContrast.matches ? 'contrast' : (prefersDark.matches ? 'dark' : 'light'),
+          colorblind: false,
+          fontScale: 1,
+          reducedMotion: prefersReducedMotion.matches
+        };
+        try {
+          const parsed = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null');
+          if (!parsed) return defaults;
+          return {
+            theme: ['light', 'dark', 'contrast'].includes(parsed.theme) ? parsed.theme : defaults.theme,
+            colorblind: Boolean(parsed.colorblind),
+            fontScale: Math.min(1.5, Math.max(.9, Number(parsed.fontScale) || 1)),
+            reducedMotion: prefersReducedMotion.matches || Boolean(parsed.reducedMotion)
+          };
+        } catch (e) {
+          return defaults;
+        }
+      }
+
+      let prefs = loadPrefs();
+
+      /* =====================================================
+         Preferências de acessibilidade
+         ===================================================== */
+      function applyPrefs() {
+        root.dataset.theme = prefs.theme;
+        root.dataset.colorblind = String(prefs.colorblind);
+        root.style.setProperty('--font-scale', String(prefs.fontScale));
+        root.classList.toggle('reduce-motion', prefs.reducedMotion);
+        const themeColor = prefs.theme === 'contrast' ? '#000000' : (prefs.theme === 'dark' ? '#0E1412' : '#F4F0E6');
+        const meta = $('#meta-theme');
+        if (meta) meta.setAttribute('content', themeColor);
+        syncPrefsUI();
+        savePrefs();
+      }
+
+      function syncPrefsUI() {
+        $$('[data-theme-choice]').forEach((button) => {
+          const selected = button.dataset.themeChoice === prefs.theme;
+          button.setAttribute('aria-pressed', String(selected));
+        });
+        $$('[data-toggle="colorblind"]').forEach((input) => {
+          input.checked = prefs.colorblind;
+        });
+        $$('[data-toggle="motion"]').forEach((input) => {
+          input.checked = prefs.reducedMotion;
+        });
+        const percent = Math.round(prefs.fontScale * 100) + '%';
+        $$('[data-font-value]').forEach((value) => { value.textContent = percent; });
+        $$('[data-font-group]').forEach((group) => {
+          group.setAttribute('aria-label', `Tamanho do texto, atual ${percent}`);
+        });
+        $$('[data-font="down"]').forEach((button) => { button.disabled = prefs.fontScale <= .9001; });
+        $$('[data-font="up"]').forEach((button) => { button.disabled = prefs.fontScale >= 1.4999; });
+      }
+
+      function setTheme(theme) {
+        if (!['light', 'dark', 'contrast'].includes(theme) || theme === prefs.theme) return;
+        prefs.theme = theme;
+        applyPrefs();
+        const names = { light: 'Tema claro ativado.', dark: 'Tema escuro ativado.', contrast: 'Alto contraste ativado.' };
+        announceGlobal(names[theme]);
+      }
+
+      function setFontScale(direction) {
+        const step = .1;
+        const next = Math.round((prefs.fontScale + (direction === 'up' ? step : -step)) * 10) / 10;
+        if (next < .9 || next > 1.5) return;
+        prefs.fontScale = next;
+        applyPrefs();
+        announceGlobal(`Tamanho do texto: ${Math.round(prefs.fontScale * 100)}%.`);
+      }
+
+      function setToggle(name, checked) {
+        if (name === 'colorblind') {
+          prefs.colorblind = checked;
+          applyPrefs();
+          announceGlobal(checked
+            ? 'Modo daltonismo ativado. Paleta azul e laranja, com símbolos em todos os estados.'
+            : 'Modo daltonismo desativado. Paleta verde e âmbar, com símbolos em todos os estados.');
+        }
+        if (name === 'motion') {
+          prefs.reducedMotion = checked;
+          applyPrefs();
+          announceGlobal(checked ? 'Movimento reduzido ativado.' : 'Movimento reduzido desativado.');
+        }
+      }
+
+      function resetPrefs() {
+        prefs = {
+          theme: prefersContrast.matches ? 'contrast' : (prefersDark.matches ? 'dark' : 'light'),
+          colorblind: false,
+          fontScale: 1,
+          reducedMotion: prefersReducedMotion.matches
+        };
+        applyPrefs();
+        announceGlobal('Preferências restauradas para o padrão.');
+      }
+
+      applyPrefs();
+
+      /* =====================================================
+         Modal com foco preso, Esc e retorno de foco
+         ===================================================== */
+      const modalRoot = $('#modal-root');
+      const modal = $('#modal');
+      const modalTitle = $('#modal-title');
+      const modalContent = $('#modal-content');
+      let modalOpen = false;
+      let lastFocused = null;
+
+      const focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+      function getModalFocusable() {
+        return $$(focusableSelector, modal).filter((element) => element.getClientRects().length > 0);
+      }
+
+      function openModal(kind, opener) {
+        lastFocused = opener || document.activeElement;
+        modalContent.innerHTML = '';
+        modal.classList.toggle('modal--settings', kind === 'a11y');
+
+        if (kind === 'rules') {
+          modalTitle.textContent = 'Como jogar';
+          const template = $('#tpl-rules');
+          if (template) modalContent.appendChild(template.content.cloneNode(true));
+        } else {
+          modalTitle.textContent = 'Acessibilidade';
+          const intro = document.createElement('p');
+          intro.className = 'modal-lede';
+          intro.textContent = 'As mudanças são aplicadas na hora e ficam salvas apenas neste navegador.';
+          modalContent.appendChild(intro);
+          const sourceCard = $('[data-settings-card]');
+          if (sourceCard) {
+            const card = sourceCard.cloneNode(true);
+            // Evita IDs duplicados: o cartão original não usa IDs, mas mantemos o cuidado.
+            card.removeAttribute('data-settings-card');
+            modalContent.appendChild(card);
+          }
+          syncPrefsUI();
+        }
+
+        modalRoot.hidden = false;
+        app.inert = true;
+        document.body.classList.add('modal-open');
+        modalOpen = true;
+        modal.scrollTop = 0;
+        requestAnimationFrame(() => modal.focus({ preventScroll: true }));
+      }
+
+      function closeModal() {
+        if (!modalOpen) return;
+        modalRoot.hidden = true;
+        app.inert = false;
+        document.body.classList.remove('modal-open');
+        modalOpen = false;
+        modalContent.innerHTML = '';
+        const returnTo = lastFocused;
+        lastFocused = null;
+        if (returnTo && returnTo.isConnected) {
+          requestAnimationFrame(() => returnTo.focus({ preventScroll: true }));
+        }
+      }
+
+      // Clique no fundo fecha; clique dentro do diálogo não propaga para o fundo.
+      modalRoot.addEventListener('click', (event) => {
+        if (event.target === modalRoot) closeModal();
+      });
+
+      function trapModalFocus(event) {
+        if (!modalOpen) return;
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeModal();
+          return;
+        }
+        if (event.key !== 'Tab') return;
+        const focusable = getModalFocusable();
+        if (!focusable.length) {
+          event.preventDefault();
+          modal.focus();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+        if (document.activeElement === modal) {
+          event.preventDefault();
+          (event.shiftKey ? last : first).focus();
+        } else if (event.shiftKey && (active === first || !modal.contains(active))) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && (active === last || !modal.contains(active))) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+
+      /* =====================================================
+         Roteamento entre Home, WordGuess e Forca
+         ===================================================== */
+      const views = {
+        home: $('#view-home'),
+        wordguess: $('#view-wordguess'),
+        forca: $('#view-forca')
+      };
+      const routes = ['home', 'wordguess', 'forca'];
+      let route = '';
+
+      function routeFromHash() {
+        const value = location.hash.replace('#', '');
+        return routes.includes(value) ? value : 'home';
+      }
+
+      function goToRoute(name, initial = false) {
+        if (!views[name]) name = 'home';
+        if (name === route) {
+          if (!initial) window.scrollTo({ top: 0, behavior: 'auto' });
+          return;
+        }
+        Object.entries(views).forEach(([key, view]) => {
+          view.hidden = key !== name;
+        });
+        route = name;
+        document.body.dataset.view = name;
+        document.title = name === 'wordguess'
+          ? 'WordGuess — Deduzi'
+          : (name === 'forca' ? 'Forca — Deduzi' : 'Deduzi — Jogo de palavras');
+
+        if (name === 'wordguess') startWordGuess({ announce: false, focus: false });
+        if (name === 'forca') startForca({ announce: false, focus: false });
+
+        if (!initial) {
+          const heading = $('.view-heading', views[name]);
+          if (heading) heading.focus({ preventScroll: true });
+          window.scrollTo({ top: 0, behavior: 'auto' });
+        }
+      }
+
+      window.addEventListener('hashchange', () => goToRoute(routeFromHash()));
+
+      /* Skip link: leva o foco ao conteúdo real da tela atual. */
+      $('.skip-link').addEventListener('click', (event) => {
+        event.preventDefault();
+        const activeView = views[route] || views.home;
+        const target = $('.view-heading', activeView) || activeView;
+        target.focus({ preventScroll: true });
+        target.scrollIntoView({ block: 'start', behavior: motionReduced() ? 'auto' : 'smooth' });
+      });
+
+      /* Link “Ver recursos de acessibilidade” */
+      const jumpA11y = $('[data-jump-a11y]');
+      if (jumpA11y) {
+        jumpA11y.addEventListener('click', (event) => {
+          event.preventDefault();
+          const section = $('#acessibilidade');
+          const heading = $('#a11y-title');
+          heading.focus({ preventScroll: true });
+          section.scrollIntoView({ block: 'start', behavior: motionReduced() ? 'auto' : 'smooth' });
+        });
+      }
+
+      /* =====================================================
+         Delegação de eventos — UI global
+         ===================================================== */
+      document.addEventListener('click', (event) => {
+        const rulesButton = event.target.closest('[data-open-rules]');
+        if (rulesButton) {
+          event.preventDefault();
+          openModal('rules', rulesButton);
+          return;
+        }
+
+        const a11yButton = event.target.closest('[data-open-a11y]');
+        if (a11yButton) {
+          event.preventDefault();
+          openModal('a11y', a11yButton);
+          return;
+        }
+
+        const closeButton = event.target.closest('[data-close-modal]');
+        if (closeButton) {
+          event.preventDefault();
+          closeModal();
+          return;
+        }
+
+        const themeButton = event.target.closest('[data-theme-choice]');
+        if (themeButton) {
+          setTheme(themeButton.dataset.themeChoice);
+          return;
+        }
+
+        const fontButton = event.target.closest('[data-font]');
+        if (fontButton) {
+          setFontScale(fontButton.dataset.font);
+          return;
+        }
+
+        const resetButton = event.target.closest('[data-reset-settings]');
+        if (resetButton) {
+          resetPrefs();
+          return;
+        }
+
+        const shareButton = event.target.closest('[data-share]');
+        if (shareButton) {
+          handleShare(shareButton);
+          return;
+        }
+
+        const restartButton = event.target.closest('[data-restart]');
+        if (restartButton) {
+          if (restartButton.dataset.restart === 'wordguess') {
+            startWordGuess({ announce: true, focus: true });
+          } else {
+            startForca({ announce: true, focus: true });
+          }
+          return;
+        }
+      });
+
+      document.addEventListener('change', (event) => {
+        const toggle = event.target.closest('[data-toggle]');
+        if (!toggle) return;
+        setToggle(toggle.dataset.toggle, toggle.checked);
+      });
+
+      /* =====================================================
+         Teclado físico + foco preso no modal
+         ===================================================== */
+      function normalizeLetter(key) {
+        const normalized = key.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+        return /^[A-Z]$/.test(normalized) ? normalized : '';
+      }
+
+      document.addEventListener('keydown', (event) => {
+        if (modalOpen) {
+          trapModalFocus(event);
+          return;
+        }
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+        const target = event.target instanceof Element ? event.target : document.body;
+        if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
+        if (target.closest('.site-header, .site-footer')) return;
+        if (target.closest('a, button') && !target.closest('.key')) return;
+
+        if (route === 'wordguess') {
+          if ((event.key === 'Enter' || event.key === ' ') && target.closest('button')) return;
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            submitWordGuess();
+            return;
+          }
+          if (event.key === 'Backspace') {
+            event.preventDefault();
+            deleteWordGuessLetter();
+            return;
+          }
+          const letter = normalizeLetter(event.key);
+          if (letter && event.key.length === 1) {
+            event.preventDefault();
+            typeWordGuessLetter(letter);
+          }
+        }
+
+        if (route === 'forca') {
+          if ((event.key === 'Enter' || event.key === ' ') && target.closest('button')) return;
+          const letter = normalizeLetter(event.key);
+          if (letter && event.key.length === 1) {
+            event.preventDefault();
+            guessForcaLetter(letter, false);
+          }
+        }
+      });
+
+      /* =====================================================
+         WordGuess
+         ===================================================== */
+      const WG_ANSWERS = ['FESTA', 'LIVRO', 'PRAIA', 'MUNDO', 'AMIGO'];
+      const WG_LABELS = {
+        correct: 'posição certa',
+        present: 'presente em outra posição',
+        absent: 'não está na palavra'
+      };
+      const WG_SYMBOLS = { correct: '✓', present: '~', absent: '×' };
+      const WG_PRIORITY = { correct: 3, present: 2, absent: 1 };
+
+      const wgBoard = $('#wg-board');
+      const wgKeys = $('#wg-keys');
+      const wgAttempt = $('#wg-attempt');
+      const wgPips = $('#wg-pips');
+      const wgMessage = $('#wg-message');
+      const wgAnnouncer = $('#wg-announcer');
+      const wgResult = $('#wg-result');
+
+      const wg = {
+        answer: '',
+        previous: '',
+        rows: [],
+        current: '',
+        row: 0,
+        over: false,
+        keyStates: {},
+        started: false
+      };
+
+      function createWordBoard() {
+        wgBoard.innerHTML = '';
+        wgPips.innerHTML = '';
+        for (let r = 0; r < 6; r += 1) {
+          const row = document.createElement('div');
+          row.className = 'board-row';
+          row.setAttribute('role', 'group');
+          row.setAttribute('aria-label', `Tentativa ${r + 1} de 6`);
+          for (let c = 0; c < 5; c += 1) {
+            const tile = document.createElement('div');
+            tile.className = 'tile is-empty';
+            tile.setAttribute('role', 'img');
+            tile.setAttribute('aria-label', `Linha ${r + 1}, coluna ${c + 1}, vazia`);
+            const letter = document.createElement('span');
+            letter.className = 'tile-letter';
+            letter.setAttribute('aria-hidden', 'true');
+            const mark = document.createElement('span');
+            mark.className = 'tile-mark';
+            mark.setAttribute('aria-hidden', 'true');
+            tile.append(letter, mark);
+            row.appendChild(tile);
+          }
+          wgBoard.appendChild(row);
+        }
+        for (let i = 0; i < 6; i += 1) {
+          const pip = document.createElement('span');
+          wgPips.appendChild(pip);
+        }
+      }
+
+      function createWordKeyboard() {
+        wgKeys.innerHTML = '';
+        for (let code = 65; code <= 90; code += 1) {
+          const letter = String.fromCharCode(code);
+          const key = document.createElement('button');
+          key.type = 'button';
+          key.className = 'key';
+          key.dataset.key = letter;
+          key.setAttribute('aria-label', `Letra ${letter}`);
+          const char = document.createElement('span');
+          char.className = 'key-char';
+          char.textContent = letter;
+          char.setAttribute('aria-hidden', 'true');
+          const mark = document.createElement('span');
+          mark.className = 'key-mark';
+          mark.setAttribute('aria-hidden', 'true');
+          key.append(char, mark);
+          wgKeys.appendChild(key);
+        }
+      }
+
+      function pickRandom(list, previous) {
+        const pool = list.filter((item) => item !== previous);
+        if (!pool.length) return list[0];
+        return pool[Math.floor(Math.random() * pool.length)];
+      }
+
+      function resetWordTile(tile, r, c) {
+        tile.className = 'tile is-empty';
+        tile.removeAttribute('data-state');
+        const letter = $('.tile-letter', tile);
+        const mark = $('.tile-mark', tile);
+        letter.textContent = '';
+        mark.textContent = '';
+        tile.setAttribute('aria-label', `Linha ${r + 1}, coluna ${c + 1}, vazia`);
+      }
+
+      function updateWordTile(r, c) {
+        const row = wgBoard.children[r];
+        if (!row) return;
+        const tile = row.children[c];
+        if (!tile) return;
+        const letter = $('.tile-letter', tile);
+        const mark = $('.tile-mark', tile);
+        const value = wg.current[c] || '';
+        letter.textContent = value;
+        mark.textContent = '';
+        tile.classList.toggle('is-empty', !value);
+        tile.removeAttribute('data-state');
+        tile.setAttribute('aria-label', value
+          ? `Linha ${r + 1}, coluna ${c + 1}, letra ${value}`
+          : `Linha ${r + 1}, coluna ${c + 1}, vazia`);
+      }
+
+      function paintWordGuessRow(rowIndex, guess, marks) {
+        const row = wgBoard.children[rowIndex];
+        if (!row) return;
+        Array.from(guess).forEach((letter, index) => {
+          const tile = row.children[index];
+          const state = marks[index];
+          const mark = $('.tile-mark', tile);
+          $('.tile-letter', tile).textContent = letter;
+          mark.textContent = WG_SYMBOLS[state];
+          tile.classList.remove('is-empty');
+          tile.dataset.state = state;
+          tile.setAttribute('aria-label', `Linha ${rowIndex + 1}, coluna ${index + 1}, letra ${letter}, ${WG_LABELS[state]}`);
+        });
+        row.classList.remove('is-current');
+        row.setAttribute('aria-current', 'false');
+      }
+
+      function updateWordGuessCurrentRow() {
+        Array.from(wgBoard.children).forEach((row, index) => {
+          const isCurrent = index === wg.row && !wg.over;
+          row.classList.toggle('is-current', isCurrent);
+          const base = `Tentativa ${index + 1} de 6`;
+          row.setAttribute('aria-label', isCurrent ? `${base}, em andamento` : base);
+          if (isCurrent) row.setAttribute('aria-current', 'true');
+          else row.removeAttribute('aria-current');
+        });
+        Array.from(wgPips.children).forEach((pip, index) => {
+          pip.classList.toggle('is-done', index < wg.row);
+          pip.classList.toggle('is-current', index === wg.row && !wg.over);
+        });
+        wgAttempt.textContent = String(Math.min(wg.row + 1, 6));
+      }
+
+      function updateWordKeyboard(marks) {
+        Array.from(wg.current || '').forEach(() => {});
+        const guess = wg.rows.length ? wg.rows[wg.rows.length - 1].guess : '';
+        const lastMarks = wg.rows.length ? wg.rows[wg.rows.length - 1].marks : null;
+        if (!lastMarks) return;
+        Array.from(guess).forEach((letter, index) => {
+          const state = lastMarks[index];
+          if (!wg.keyStates[letter] || WG_PRIORITY[state] > WG_PRIORITY[wg.keyStates[letter]]) {
+            wg.keyStates[letter] = state;
+          }
+        });
+        Array.from(wgKeys.children).forEach((key) => {
+          const state = wg.keyStates[key.dataset.key];
+          if (!state) return;
+          key.dataset.state = state;
+          const mark = $('.key-mark', key);
+          if (mark) mark.textContent = WG_SYMBOLS[state];
+          key.setAttribute('aria-label', `Letra ${key.dataset.key}, ${WG_LABELS[state]}`);
+        });
+      }
+
+      function showWordMessage(message) {
+        wgMessage.textContent = message;
+      }
+
+      function announceWordAttempt(rowIndex, guess, marks) {
+        const parts = Array.from(guess).map((letter, index) => `${letter}: ${WG_LABELS[marks[index]]}`);
+        return `Tentativa ${rowIndex + 1}: ${parts.join('; ')}.`;
+      }
+
+      function typeWordGuessLetter(letter) {
+        if (wg.over || wg.current.length >= 5) return;
+        wg.current += letter;
+        updateWordTile(wg.row, wg.current.length - 1);
+        showWordMessage('');
+      }
+
+      function deleteWordGuessLetter() {
+        if (wg.over || !wg.current.length) return;
+        wg.current = wg.current.slice(0, -1);
+        updateWordTile(wg.row, wg.current.length);
+        showWordMessage('');
+      }
+
+      function submitWordGuess() {
+        if (wg.over) return;
+        if (wg.current.length !== 5) {
+          const missing = 5 - wg.current.length;
+          const message = `Digite 5 letras para enviar. ${missing === 1 ? 'Falta 1 letra.' : `Faltam ${missing} letras.`}`;
+          showWordMessage(message);
+          speak(wgAnnouncer, message);
+          return;
+        }
+
+        const guess = wg.current;
+        const marks = evaluateGuess(guess, wg.answer);
+        wg.rows.push({ guess, marks });
+        paintWordGuessRow(wg.row, guess, marks);
+        wg.current = '';
+        wg.row += 1;
+        showWordMessage('');
+        updateWordKeyboard();
+
+        const won = guess === wg.answer;
+        const lost = !won && wg.row >= 6;
+
+        if (won || lost) {
+          const finalAnnouncement = `${announceWordAttempt(wg.row - 1, guess, marks)} ${won
+            ? `Você acertou! A palavra era ${wg.answer}.`
+            : `Fim de jogo. A palavra era ${wg.answer}.`}`;
+          finishWordGuess(won, finalAnnouncement);
+          return;
+        }
+
+        updateWordGuessCurrentRow();
+        speak(wgAnnouncer, announceWordAttempt(wg.row - 1, guess, marks));
+      }
+
+      function evaluateGuess(guess, answer) {
+        const marks = Array(guess.length).fill('absent');
+        const remaining = {};
+        Array.from(answer).forEach((letter) => {
+          remaining[letter] = (remaining[letter] || 0) + 1;
+        });
+        Array.from(guess).forEach((letter, index) => {
+          if (letter === answer[index]) {
+            marks[index] = 'correct';
+            remaining[letter] -= 1;
+          }
+        });
+        Array.from(guess).forEach((letter, index) => {
+          if (marks[index] === 'correct') return;
+          if (remaining[letter] > 0) {
+            marks[index] = 'present';
+            remaining[letter] -= 1;
+          }
+        });
+        return marks;
+      }
+
+      function finishWordGuess(won, announcement) {
+        wg.over = true;
+        updateWordGuessCurrentRow();
+        Array.from(wgKeys.children).forEach((key) => { key.disabled = true; });
+        $$('.key--action', $('#wg-keyboard')).forEach((button) => { button.disabled = true; });
+
+        $('#wg-result-kicker').textContent = won ? 'Vitória' : 'Fim de jogo';
+        $('#wg-result-title').textContent = won ? 'Você acertou!' : 'Não foi desta vez.';
+        $('#wg-result-copy').textContent = won
+          ? `Você deduziu a palavra em ${wg.rows.length} ${wg.rows.length === 1 ? 'tentativa' : 'tentativas'}.`
+          : 'As seis tentativas terminaram. Reorganize as pistas e tente outra palavra.';
+        $('#wg-result-word').textContent = wg.answer;
+        $('[data-share-note]', wgResult).textContent = '';
+        $('[data-manual-share]', wgResult).hidden = true;
+        wgResult.hidden = false;
+        speak(wgAnnouncer, announcement);
+        requestAnimationFrame(() => {
+          $('#wg-result-title').focus({ preventScroll: true });
+          wgResult.scrollIntoView({ block: 'nearest', behavior: motionReduced() ? 'auto' : 'smooth' });
+        });
+      }
+
+      function startWordGuess(options = {}) {
+        wg.answer = pickRandom(WG_ANSWERS, wg.previous);
+        wg.previous = wg.answer;
+        wg.rows = [];
+        wg.current = '';
+        wg.row = 0;
+        wg.over = false;
+        wg.keyStates = {};
+        wg.started = true;
+        showWordMessage('');
+        wgResult.hidden = true;
+
+        Array.from(wgBoard.children).forEach((row, r) => {
+          Array.from(row.children).forEach((tile, c) => resetWordTile(tile, r, c));
+        });
+        Array.from(wgKeys.children).forEach((key) => {
+          key.disabled = false;
+          delete key.dataset.state;
+          key.setAttribute('aria-label', `Letra ${key.dataset.key}`);
+          const mark = $('.key-mark', key);
+          if (mark) mark.textContent = '';
+        });
+        $$('.key--action', $('#wg-keyboard')).forEach((button) => { button.disabled = false; });
+
+        updateWordGuessCurrentRow();
+        if (options.announce !== false) {
+          speak(wgAnnouncer, `Nova partida de WordGuess. A palavra tem 5 letras. Você tem 6 tentativas.`);
+        }
+        if (options.focus) {
+          requestAnimationFrame(() => {
+            wgBoard.focus({ preventScroll: true });
+            wgBoard.scrollIntoView({ block: 'center', behavior: motionReduced() ? 'auto' : 'smooth' });
+          });
+        }
+      }
+
+      /* Eventos do teclado virtual do WordGuess */
+      $('#wg-keyboard').addEventListener('click', (event) => {
+        const key = event.target.closest('.key[data-key]');
+        if (key) {
+          typeWordGuessLetter(key.dataset.key);
+          if (event.detail > 0) wgBoard.focus({ preventScroll: true });
+          return;
+        }
+        const action = event.target.closest('[data-action]');
+        if (!action) return;
+        if (action.dataset.action === 'submit') submitWordGuess();
+        if (action.dataset.action === 'delete') deleteWordGuessLetter();
+      });
+
+      /* =====================================================
+         Forca
+         ===================================================== */
+      const FORCA_WORDS = ['BICICLETA', 'JANELA', 'ELEFANTE', 'CAMISA', 'BORBOLETA'];
+      const forcaKeys = $('#forca-keys');
+      const forcaWord = $('#forca-word');
+      const forcaLives = $('#forca-lives');
+      const forcaMessage = $('#forca-message');
+      const forcaAnnouncer = $('#forca-announcer');
+      const forcaResult = $('#forca-result');
+
+      const forca = {
+        word: '',
+        previous: '',
+        guessed: new Set(),
+        wrong: 0,
+        over: false,
+        won: false,
+        started: false
+      };
+
+      function createForcaKeyboard() {
+        forcaKeys.innerHTML = '';
+        for (let code = 65; code <= 90; code += 1) {
+          const letter = String.fromCharCode(code);
+          const key = document.createElement('button');
+          key.type = 'button';
+          key.className = 'key';
+          key.dataset.key = letter;
+          key.setAttribute('aria-label', `Letra ${letter}`);
+          const char = document.createElement('span');
+          char.className = 'key-char';
+          char.textContent = letter;
+          char.setAttribute('aria-hidden', 'true');
+          const mark = document.createElement('span');
+          mark.className = 'key-mark';
+          mark.setAttribute('aria-hidden', 'true');
+          key.append(char, mark);
+          forcaKeys.appendChild(key);
+        }
+      }
+
+      function buildForcaWord() {
+        forcaWord.innerHTML = '';
+        Array.from(forca.word).forEach((letter, index) => {
+          const slot = document.createElement('span');
+          slot.className = 'letter-slot';
+          slot.setAttribute('role', 'img');
+          slot.setAttribute('aria-label', `Posição ${index + 1}: oculta`);
+          const content = document.createElement('span');
+          content.className = 'slot-letter';
+          content.textContent = '';
+          slot.appendChild(content);
+          forcaWord.appendChild(slot);
+        });
+        updateForcaWordLabel();
+        $('#forca-length').textContent = `${forca.word.length} letras`;
+        $('#forca-used').textContent = '0 tentativas';
+      }
+
+      function updateForcaWordLabel() {
+        const revealed = Array.from(forca.word).filter((letter) => forca.guessed.has(letter)).length;
+        forcaWord.setAttribute('aria-label', `Palavra de ${forca.word.length} letras, ${revealed} ${revealed === 1 ? 'letra revelada' : 'letras reveladas'}.`);
+      }
+
+      function revealForcaLetter(letter, animate) {
+        Array.from(forca.word).forEach((wordLetter, index) => {
+          if (wordLetter !== letter) return;
+          const slot = forcaWord.children[index];
+          const content = $('.slot-letter', slot);
+          if (content.textContent === letter) return;
+          content.textContent = letter;
+          slot.classList.add('is-on');
+          if (animate) {
+            slot.classList.remove('just-revealed');
+            void slot.offsetWidth;
+            slot.classList.add('just-revealed');
+          }
+          slot.setAttribute('aria-label', `Posição ${index + 1}: ${letter}`);
+        });
+        updateForcaWordLabel();
+      }
+
+      function updateForcaLives() {
+        const remaining = 6 - forca.wrong;
+        const lives = $$('.life', forcaLives);
+        lives.forEach((life, index) => {
+          life.classList.toggle('is-lost', index >= remaining);
+        });
+        const count = $('.lives-count', forcaLives);
+        if (count) count.textContent = `${remaining}/6 vidas`;
+        forcaLives.setAttribute('aria-label', `${remaining} de 6 vidas restantes`);
+      }
+
+      function updateForcaKey(letter, state) {
+        const key = $(`.key[data-key="${letter}"]`, forcaKeys);
+        if (!key) return;
+        key.disabled = true;
+        key.dataset.state = state;
+        key.classList.add('is-used');
+        const mark = $('.key-mark', key);
+        if (mark) mark.textContent = state === 'correct' ? '✓' : '×';
+        key.setAttribute('aria-label', `Letra ${letter}, ${state === 'correct' ? 'acertou' : 'não está na palavra'}`);
+      }
+
+      function countLetter(word, letter) {
+        return Array.from(word).filter((character) => character === letter).length;
+      }
+
+      function guessForcaLetter(letter, viaKeyboard) {
+        if (forca.over || forca.guessed.has(letter)) return;
+        forca.guessed.add(letter);
+        const hits = countLetter(forca.word, letter);
+        const wasFocusedOnKey = document.activeElement && document.activeElement.closest && document.activeElement.closest('#forca-keys');
+        forcaMessage.classList.remove('is-good', 'is-bad');
+
+        if (hits > 0) {
+          revealForcaLetter(letter, true);
+          updateForcaKey(letter, 'correct');
+          forcaMessage.textContent = `✓ A letra ${letter} está na palavra${hits > 1 ? ` (${hits}×)` : ''}.`;
+          forcaMessage.classList.add('is-good');
+        } else {
+          forca.wrong += 1;
+          updateForcaKey(letter, 'wrong');
+          const remaining = 6 - forca.wrong;
+          forcaMessage.textContent = remaining > 0
+            ? `× A letra ${letter} não está na palavra. Restam ${remaining} ${remaining === 1 ? 'vida' : 'vidas'}.`
+            : `× A letra ${letter} não está na palavra. As vidas acabaram.`;
+          forcaMessage.classList.add('is-bad');
+        }
+
+        updateForcaLives();
+        $('#forca-used').textContent = `${forca.guessed.size} ${forca.guessed.size === 1 ? 'tentativa' : 'tentativas'}`;
+
+        const solved = Array.from(forca.word).every((character) => forca.guessed.has(character));
+        const lost = 6 - forca.wrong <= 0;
+        const remainingLives = 6 - forca.wrong;
+
+        if (solved) {
+          finishForca(true, `Você revelou todas as letras! A palavra era ${forca.word}. Você terminou com ${remainingLives} ${remainingLives === 1 ? 'vida' : 'vidas'}.`);
+          return;
+        }
+        if (lost) {
+          finishForca(false, `As vidas acabaram. A palavra era ${forca.word}.`);
+          return;
+        }
+
+        const announcement = hits > 0
+          ? `Letra ${letter}: está na palavra${hits > 1 ? `, ${hits} vezes` : ''}. Restam ${remainingLives} ${remainingLives === 1 ? 'vida' : 'vidas'}.`
+          : `Letra ${letter}: não está na palavra. Restam ${remainingLives} ${remainingLives === 1 ? 'vida' : 'vidas'}.`;
+        speak(forcaAnnouncer, announcement);
+
+        if (viaKeyboard || wasFocusedOnKey) {
+          focusNextForcaKey(letter);
+        }
+      }
+
+      function focusNextForcaKey(currentLetter) {
+        const all = $$('.key[data-key]', forcaKeys);
+        const currentIndex = all.findIndex((key) => key.dataset.key === currentLetter);
+        for (let offset = 1; offset <= all.length; offset += 1) {
+          const candidate = all[(currentIndex + offset) % all.length];
+          if (!candidate.disabled) {
+            candidate.focus({ preventScroll: true });
+            return;
+          }
+        }
+      }
+
+      function finishForca(won, announcement) {
+        forca.over = true;
+        forca.won = won;
+        Array.from(forcaKeys.children).forEach((key) => { key.disabled = true; });
+        const remaining = 6 - forca.wrong;
+
+        $('#forca-result-kicker').textContent = won ? 'Vitória' : 'Fim de jogo';
+        $('#forca-result-title').textContent = won ? 'Palavra revelada!' : 'Não foi desta vez.';
+        $('#forca-result-copy').textContent = won
+          ? `Você descobriu a palavra com ${remaining} ${remaining === 1 ? 'vida restante' : 'vidas restantes'}.`
+          : 'As vidas acabaram, mas a palavra agora está à vista. Tente outra rodada.';
+        $('#forca-result-word').textContent = forca.word;
+        $('[data-share-note]', forcaResult).textContent = '';
+        $('[data-manual-share]', forcaResult).hidden = true;
+        forcaResult.hidden = false;
+        speak(forcaAnnouncer, announcement);
+        requestAnimationFrame(() => {
+          $('#forca-result-title').focus({ preventScroll: true });
+          forcaResult.scrollIntoView({ block: 'nearest', behavior: motionReduced() ? 'auto' : 'smooth' });
+        });
+      }
+
+      function startForca(options = {}) {
+        forca.word = pickRandom(FORCA_WORDS, forca.previous);
+        forca.previous = forca.word;
+        forca.guessed = new Set();
+        forca.wrong = 0;
+        forca.over = false;
+        forca.won = false;
+        forca.started = true;
+
+        forcaResult.hidden = true;
+        forcaMessage.textContent = 'Escolha uma letra para começar.';
+        forcaMessage.classList.remove('is-good', 'is-bad');
+        buildForcaWord();
+        updateForcaLives();
+
+        Array.from(forcaKeys.children).forEach((key) => {
+          key.disabled = false;
+          delete key.dataset.state;
+          key.classList.remove('is-used');
+          key.setAttribute('aria-label', `Letra ${key.dataset.key}`);
+          const mark = $('.key-mark', key);
+          if (mark) mark.textContent = '';
+        });
+
+        if (options.announce !== false) {
+          speak(forcaAnnouncer, `Nova partida de Forca. A palavra tem ${forca.word.length} letras. Você tem 6 vidas.`);
+        }
+        if (options.focus) {
+          requestAnimationFrame(() => {
+            forcaWord.setAttribute('tabindex', '-1');
+            forcaWord.focus({ preventScroll: true });
+            forcaWord.scrollIntoView({ block: 'center', behavior: motionReduced() ? 'auto' : 'smooth' });
+          });
+        }
+      }
+
+      /* Eventos do teclado da Forca */
+      forcaKeys.addEventListener('click', (event) => {
+        const key = event.target.closest('.key[data-key]');
+        if (!key) return;
+        guessForcaLetter(key.dataset.key, event.detail === 0);
+      });
+
+      /* =====================================================
+         Compartilhamento acessível
+         ===================================================== */
+      function wordGuessShareText() {
+        const count = wg.over ? (wg.answer && wg.rows.some((row) => row.guess === wg.answer) ? wg.rows.length : 'X') : wg.rows.length;
+        const lines = wg.rows.map((row) => row.marks.map((state) => WG_SYMBOLS[state]).join(''));
+        return [
+          `Deduzi · WordGuess ${count}/6`,
+          ...lines,
+          '',
+          '✓ posição certa · ~ outra posição · × fora da palavra'
+        ].join('\n');
+      }
+
+      function forcaShareText() {
+        const remaining = 6 - forca.wrong;
+        return [
+          `Deduzi · Forca — ${forca.won ? 'vitória' : 'fim de jogo'}`,
+          `${remaining}/6 vidas · ${forca.word}`,
+          '',
+          '✓ letra na palavra · × letra fora'
+        ].join('\n');
+      }
+
+      async function copyText(text) {
+        let copied = false;
+        if (navigator.clipboard && window.isSecureContext) {
+          try {
+            await navigator.clipboard.writeText(text);
+            copied = true;
+          } catch (e) {
+            copied = false;
+          }
+        }
+        if (copied) return true;
+
+        // Fallback para navegadores/file:// sem permissão de Clipboard API.
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.setAttribute('aria-hidden', 'true');
+        textarea.style.position = 'fixed';
+        textarea.style.top = '0';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        textarea.setSelectionRange(0, textarea.value.length);
+        try {
+          copied = document.execCommand('copy');
+        } catch (e) {
+          copied = false;
+        }
+        textarea.remove();
+        return copied;
+      }
+
+      async function handleShare(button) {
+        const game = button.dataset.share;
+        const panel = button.closest('.result-panel');
+        if (!panel) return;
+        const note = $('[data-share-note]', panel);
+        const manual = $('[data-manual-share]', panel);
+        const textarea = $('textarea', manual);
+        const text = game === 'wordguess' ? wordGuessShareText() : forcaShareText();
+
+        button.disabled = true;
+        const copied = await copyText(text);
+        button.disabled = false;
+
+        if (copied) {
+          note.textContent = '✓ Resultado copiado para a área de transferência.';
+          note.classList.add('is-success');
+          manual.hidden = true;
+          announceGlobal('Resultado copiado para a área de transferência.');
+        } else {
+          note.textContent = 'Não foi possível copiar automaticamente. O texto está disponível abaixo.';
+          note.classList.remove('is-success');
+          manual.hidden = false;
+          textarea.value = text;
+          textarea.focus();
+          textarea.select();
+          announceGlobal('Não foi possível copiar automaticamente. Selecione o texto no campo de cópia manual.');
+        }
+      }
+
+      /* =====================================================
+         Inicialização
+         ===================================================== */
+      createWordBoard();
+      createWordKeyboard();
+      createForcaKeyboard();
+      startWordGuess({ announce: false, focus: false });
+      startForca({ announce: false, focus: false });
+      goToRoute(routeFromHash(), true);
+
+      // Mantém o foco previsível caso a janela perca o estado do modal.
+      window.addEventListener('focus', () => {
+        if (modalOpen && !modal.contains(document.activeElement)) {
+          modal.focus({ preventScroll: true });
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
